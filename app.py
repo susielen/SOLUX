@@ -1,122 +1,65 @@
 import streamlit as st
 import pandas as pd
 import re
-from io import BytesIO
+import io
 
-# 1. Configuração da Página
-st.set_page_config(page_title="SOLUX", page_icon="💡", layout="wide")
+# Título da página
+st.set_page_config(page_title="Robô Conciliador", layout="wide")
+st.title("🤖 Meu Robô de Conciliação")
+st.write("Arraste o arquivo do Razão da Domínio aqui embaixo e eu faço a mágica!")
 
-# 2. O ESTILO (Cores Lilás e Roxo Restauradas)
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
-    .stApp { background-color: #F3F0FF; }
-    .titulo { font-family: 'Montserrat', sans-serif; color: #4B0082; font-size: 28px; font-weight: 800; text-align: center; padding: 10px; background-color: rgba(230, 224, 255, 0.9); border-radius: 10px; border: 1px solid #9B8ADE; margin-bottom: 25px; }
-    [data-testid="stSidebar"] { background-color: #9B8ADE !important; }
-    .stDownloadButton button { background-color: #9B8ADE !important; color: white !important; font-weight: bold !important; width: 100%; border-radius: 8px; }
-    </style>
-    <p class="titulo">💡 SOLUX: Seu parceiro na conciliação 💡</p>
-    """, unsafe_allow_html=True)
+# 1. Botão para subir o arquivo
+arquivo_subido = st.file_uploader("Escolha o arquivo CSV do Razão", type=['csv'])
 
-# 3. Funções de Suporte
-def to_num(val):
-    if pd.isna(val) or str(val).strip() == '': return 0.0
-    try:
-        s = str(val).replace('R$', '').replace('.', '').replace(',', '.').strip()
-        return float(s)
-    except: return 0.0
+if arquivo_subido is not None:
+    # Lendo o arquivo (pulando o cabeçalho da Domínio)
+    df = pd.read_csv(arquivo_subido, skiprows=7)
 
-# 4. A NOVA LUPA (Foca no número que você quer!)
-def extrair_nf_exata(historico):
-    h = str(historico).upper()
-    # Lista prioritária baseada no que você me ensinou
-    termos = [
-        r'DACTE-D\s?(\d+)', r'DACTE\s?(\d+)', r'CTE\s?(\d+)',
-        r'N\.\s?COMPRA\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', 
-        r'SAIDA\s?(\d+)', r'PRESTADO\s?(\d+)',
-        r'NFE\s?(\d+)', r'NF\s?(\d+)'
-    ]
-    for p in termos:
-        achado = re.findall(p, h)
-        if achado: return str(int(achado[0]))
-    
-    # Se não achar palavra-chave, busca o último número de 1 a 6 dígitos no texto
-    avulso = re.findall(r'\b(\d{1,6})\b', h)
-    if avulso: return str(int(avulso[-1]))
-    
-    return "SEM NF"
+    # Limpeza básica
+    df = df.dropna(subset=['Histórico'])
+    df = df[~df['Histórico'].str.contains("SALDO ANTERIOR", na=False)]
 
-# 5. Painel Lateral
-with st.sidebar:
-    st.header("⚙️ Painel de Controle")
-    tipo_proj = st.radio("Este projeto é de:", ["Cliente", "Fornecedor"])
-    st.markdown("---")
-    arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
+    # 2. Aplicando as suas regras de sinal (Fornecedor)
+    # Crédito é Negativo (-) e Débito é Positivo (+)
+    df['Débito'] = pd.to_numeric(df['Débito'], errors='coerce').fillna(0)
+    df['Crédito'] = pd.to_numeric(df['Crédito'], errors='coerce').fillna(0)
+    df['Valor_Real'] = df['Débito'] - df['Crédito']
 
-# 6. Processamento
-if arquivo:
-    try:
-        df_bruto = pd.read_excel(arquivo, header=None)
-        df_bruto = df_bruto.dropna(how='all').reset_index(drop=True)
+    # 3. O Detetive de Notas (Procurando SAÍDA, PRESTADO e números)
+    def localizar_nota(texto):
+        texto_limpo = str(texto).upper()
+        # Procura as palavras que você pediu
+        if "SAÍDA" in texto_limpo or "PRESTADO" in texto_limpo:
+             # Aqui o robô fica mais atento!
+             pass
         
-        banco, f_info = {}, {}
-        f_atual, dados = None, []
-        empresa = "EMPRESA"
+        # Pega a sequência de números (Nota Fiscal)
+        achado = re.search(r'(\d{3,})', texto_limpo)
+        return achado.group(1) if achado else "Sem Nota"
 
-        for i in range(len(df_bruto)):
-            lin = df_bruto.iloc[i]
-            c0 = str(lin[0])
+    df['Nota_Fiscal'] = df['Histórico'].apply(localizar_nota)
 
-            if "Empresa:" in c0: empresa = str(lin[2])
-            if "Conta:" in c0:
-                if f_atual and dados: banco[f_atual] = pd.DataFrame(dados)
-                f_atual = str(lin[1]).strip()
-                f_info[f_atual] = f"{f_atual} - {str(lin[5])}"
-                dados = []
-                continue
+    # 4. Criando a Tabela Dinâmica
+    tabela_dinamica = df.groupby('Nota_Fiscal').agg({
+        'Débito': 'sum',
+        'Crédito': 'sum',
+        'Valor_Real': 'sum'
+    }).reset_index()
 
-            if len(lin) >= 10 and f_atual and re.search(r'\d{2}/\d{2}', c0):
-                hist = str(lin[2]).strip()
-                if "TOTAL" in hist.upper(): continue
-                
-                # PEGA O NÚMERO APENAS DO HISTÓRICO (Ignora a coluna 1 que estava errada)
-                nf_final = extrair_nf_exata(hist)
-                
-                v_deb = to_num(lin[8])
-                v_cre = to_num(lin[9])
+    tabela_dinamica.rename(columns={'Valor_Real': 'Saldo_Final'}, inplace=True)
 
-                # REGRA DE SINAIS DO USUÁRIO
-                if tipo_proj == "Fornecedor":
-                    # Crédito (+) e Débito (-)
-                    d, c = -v_deb if v_deb != 0 else 0, v_cre if v_cre != 0 else 0
-                else:
-                    # Cliente: Crédito (-) e Débito (+)
-                    d, c = v_deb if v_deb != 0 else 0, -v_cre if v_cre != 0 else 0
+    # Mostrando o resultado na tela
+    st.subheader("✅ Aqui está sua conciliação:")
+    st.dataframe(tabela_dinamica, use_container_width=True)
 
-                dados.append({"Data": c0, "NF": nf_final, "Hist": hist, "Deb": d, "Cred": c})
-
-        if f_atual and dados: banco[f_atual] = pd.DataFrame(dados)
-
-        if banco:
-            out = BytesIO()
-            with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
-                for cod, df in banco.items():
-                    ws = writer.book.add_worksheet(str(cod)[:31])
-                    f_moeda = writer.book.add_format({'num_format': 'R$ #,##0.00', 'border': 1})
-                    f_pos = writer.book.add_format({'num_format': 'R$ #,##0.00', 'border': 1, 'font_color': 'green'})
-                    f_neg = writer.book.add_format({'num_format': 'R$ #,##0.00', 'border': 1, 'font_color': 'red'})
-                    f_cab = writer.book.add_format({'bold': 1, 'bg_color': '#9B8ADE', 'font_color': 'white', 'border': 1})
-
-                    df.to_excel(writer, sheet_name=str(cod)[:31], startrow=5, startcol=1, index=False)
-                    
-                    # CONCILIAÇÃO: Agora o DACTE 330 vai aparecer uma vez só!
-                    resumo = df.groupby("NF").agg({"Deb": "sum", "Cred": "sum"}).reset_index()
-                    resumo["Dif"] = resumo["Deb"] + resumo["Cred"]
-                    
-                    resumo.to_excel(writer, sheet_name=str(cod)[:31], startrow=5, startcol=8, index=False)
-                    # (Espaço para aplicar cores na coluna Dif no Excel final)
-
-            st.success("✨ Agora sim! O robô aprendeu a ler o número do frete corretamente.")
-            st.download_button("📥 Baixar Relatório", out.getvalue(), "conciliacao_final.xlsx")
-    except Exception as e:
-        st.error(f"Erro: {e}")
+    # 5. Botão para baixar o arquivo pronto
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        tabela_dinamica.to_excel(writer, index=False)
+    
+    st.download_button(
+        label="📥 Baixar Planilha Conciliada",
+        data=output.getvalue(),
+        file_name="conciliacao_pronta.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
