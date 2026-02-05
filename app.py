@@ -5,109 +5,56 @@ from io import BytesIO
 import time
 
 # 1. Configuração da Página
-st.set_page_config(
-    page_title="SOLUX",
-    page_icon="💡",
-    layout="wide"
-)
+st.set_page_config(page_title="SOLUX", page_icon="💡", layout="wide")
 
-# 2. O ESTILO (Cores Suaves, Letra Moderna e Fundo Profissional)
+# 2. Estilo Visual (Cores e Fontes)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
-
-    /* FUNDO LILÁS LAVANDA (Suave para os olhos) */
-    .stApp {
-        background-color: #F3F0FF; 
-        background-image: url("https://www.transparenttextures.com/patterns/cubes.png");
-        background-attachment: fixed;
-    }
-
-    /* BARRA LATERAL E TOPO (Roxo Pastel) */
-    header[data-testid="stHeader"], [data-testid="stSidebar"] {
-        background-color: #9B8ADE !important;
-    }
-
-    /* ESCONDER A COROA E ÍCONES DO TOPO */
-    button[kind="headerNoPadding"], .stApp header svg {
-        display: none !important;
-    }
-
-    /* TÍTULO FINO E ELEGANTE */
-    .titulo {
-        font-family: 'Montserrat', sans-serif;
-        color: #4B0082; /* Roxo escuro para contraste */
-        font-size: 28px; 
-        font-weight: 800; 
-        text-align: center; 
-        padding: 8px; 
-        background-color: rgba(230, 224, 255, 0.9);
-        border-radius: 10px;
-        border: 1px solid #9B8ADE;
-        margin-top: -35px;
-        margin-bottom: 25px;
-    }
-
-    /* TEXTOS DA BARRA LATERAL EM NEGRITO */
-    [data-testid="stSidebar"] * {
-        font-family: 'Montserrat', sans-serif;
-        color: #FFFFFF !important;
-        font-weight: 600 !important;
-    }
-
-    /* CAIXA DE UPLOAD LILÁS CLARO */
-    [data-testid="stFileUploaderDropzone"] {
-        background-color: rgba(255, 255, 255, 0.4) !important; 
-        border: 2px dashed #9B8ADE !important;
-        border-radius: 12px !important;
-    }
-
-    /* --- ESTA É A PARTE QUE MUDA A COR DO BROWSE FILES --- */
-    [data-testid="stFileUploaderDropzone"] button {
-        background-color: #E6E0FF !important; /* Cor igual a caixinha */
-        color: #4B0082 !important; /* Letra roxa */
-        border: 1px solid #9B8ADE !important;
-        border-radius: 8px !important;
-        transition: 0.3s; /* Deixa o efeito suave */
-    }
-
-    [data-testid="stFileUploaderDropzone"] button:hover {
-        background-color: #9B8ADE !important; /* Cor igual ao corredor (lilás mais forte) */
-        color: white !important; /* Letra fica branca */
-    }
-    
-    /* BOTÃO DE DOWNLOAD PERSONALIZADO */
-    .stDownloadButton button {
-        background-color: #9B8ADE !important;
-        color: white !important;
-        border-radius: 8px !important;
-        border: none !important;
-        padding: 10px 20px !important;
-    }
+    .stApp { background-color: #F3F0FF; background-image: url("https://www.transparenttextures.com/patterns/cubes.png"); background-attachment: fixed; }
+    header[data-testid="stHeader"], [data-testid="stSidebar"] { background-color: #9B8ADE !important; }
+    .titulo { font-family: 'Montserrat', sans-serif; color: #4B0082; font-size: 28px; font-weight: 800; text-align: center; padding: 10px; background-color: rgba(230, 224, 255, 0.9); border-radius: 10px; border: 1px solid #9B8ADE; margin-bottom: 25px; }
+    [data-testid="stSidebar"] * { color: #FFFFFF !important; font-weight: 600 !important; }
+    .stDownloadButton button { background-color: #9B8ADE !important; color: white !important; border-radius: 8px !important; width: 100%; }
     </style>
-    
     <p class="titulo">💡 SOLUX: Seu parceiro na conciliação 💡</p>
     """, unsafe_allow_html=True)
 
-# 3. FUNÇÕES DE SUPORTE
+# 3. Funções de Suporte
 def to_num(val):
+    if pd.isna(val) or str(val).strip() == '': return 0.0
     try:
-        if pd.isna(val) or str(val).strip() == '': return 0.0
-        return float(str(val).replace('.', '').replace(',', '.'))
+        # Remove pontos de milhar e troca vírgula por ponto
+        s = str(val).replace('.', '').replace(',', '.').strip()
+        return float(s)
     except: return 0.0
 
-# 4. PAINEL LATERAL
+def extrair_nf(historico, documento):
+    # Procura padrões comuns de nota fiscal no histórico
+    padrao = re.findall(r'(?:NFe|NF|Duplicata|Título|Doc|Fatura|FT|REC)\s?(\d+)', str(historico), re.IGNORECASE)
+    if padrao:
+        try: return str(int(padrao[0])) # Remove zeros à esquerda (002036 -> 2036)
+        except: return str(padrao[0])
+    
+    # Se não achou no histórico, tenta a coluna de documento
+    doc_limpo = str(documento).strip()
+    if doc_limpo and doc_limpo.isdigit() and doc_limpo != '0':
+        try: return str(int(doc_limpo))
+        except: return doc_limpo
+        
+    return "SEM NF"
+
+# 4. Painel Lateral
 with st.sidebar:
     st.header("⚙️ Painel de Controle")
-    # Regra: Fornecedor (+/-) e Cliente (-/+) conforme conversamos
     tipo_robo = st.radio("Este projeto é de:", ["Cliente", "Fornecedor"])
+    st.info(f"Regra Ativa: {'Crédito (-) e Débito (+)' if tipo_robo == 'Cliente' else 'Crédito (+) e Débito (-)'}")
     st.markdown("---")
-    arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
+    arquivo = st.file_uploader("Suba o arquivo (Excel ou CSV)", type=["xlsx", "xls", "csv"])
 
-# 5. LÓGICA DE CONCILIAÇÃO
+# 5. Processamento Principal
 if arquivo:
-    with st.spinner('Conciliando...'):
-        time.sleep(3)
+    with st.spinner('O robô está organizando as caixinhas... ⏳'):
         df_bruto = None
         try:
             if arquivo.name.endswith('.csv'):
@@ -116,110 +63,138 @@ if arquivo:
                 df_bruto = pd.read_excel(arquivo, header=None, engine='xlrd')
             else:
                 df_bruto = pd.read_excel(arquivo, header=None)
+            
+            df_bruto = df_bruto.dropna(how='all').reset_index(drop=True)
+            
         except Exception as e:
-            st.error(f"⚠️ Erro ao abrir: {e}")
-if arquivo:
-    with st.spinner('Conciliando...⏳⌛💱'):
-        df_bruto = None
+            st.error(f"⚠️ Erro ao ler arquivo: {e}")
+
+    if df_bruto is not None:
         try:
-            if arquivo.name.endswith('.csv'):
-                df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
-            elif arquivo.name.endswith('.xls'):
-                df_bruto = pd.read_excel(arquivo, header=None, engine='xlrd')
-            else:
-                df_bruto = pd.read_excel(arquivo, header=None)
-        except Exception as e:
-            st.error(f"⚠️ Erro ao abrir: {e}. Verifique o seu requirements.txt.")
+            nome_empresa = "EMPRESA"
+            banco = {}
+            f_info = {}
+            f_cod_atual = None
+            dados_acumulados = []
 
-        if df_bruto is not None:
-            try:
-                nome_emp = "EMPRESA"
-                for i in range(min(15, len(df_bruto))):
-                    if "Empresa:" in str(df_bruto.iloc[i, 0]):
-                        nome_emp = str(df_bruto.iloc[i, 2]); break
+            for i in range(len(df_bruto)):
+                linha = df_bruto.iloc[i]
+                primeira_cel = str(linha[0])
 
-                banco, f_info = {}, {}
-                f_cod, dados = None, []
+                # Identifica Nome da Empresa
+                if "Empresa:" in primeira_cel:
+                    nome_empresa = str(linha[2]) if pd.notna(linha[2]) else nome_empresa
 
-                for i in range(len(df_bruto)):
-                    lin = df_bruto.iloc[i]
-                    if "Conta:" in str(lin[0]):
-                        if f_cod and dados: banco[f_cod] = pd.DataFrame(dados)
-                        f_cod = str(lin[1]).strip()
-                        f_info[f_cod] = f"{f_cod} - {str(lin[5]) if pd.notna(lin[5]) else str(lin[2])}"
-                        dados = []
-                    elif len(lin) > 9:
-                        deb, cre = to_num(lin[8]), to_num(lin[9])
-                        hist = str(lin[2]).strip()
-                        if (deb != 0 or cre != 0) and pd.notna(lin[0]):
-                            if 'TOTAL' in hist.upper(): continue
-                            try: dt = pd.to_datetime(lin[0]).strftime('%d/%m/%Y')
-                            except: dt = str(lin[0])
-                            nf_f = re.findall(r'NFe\s?(\d+)', hist)
-                            nf = nf_f[0] if nf_f else (str(lin[1]).strip() if pd.notna(lin[1]) else "S/N")
-                            
-                            # REGRA DE SINAIS (Cliente: Débito + / Crédito -)
-                            if tipo_robo == "Fornecedor": val_deb, val_cre = -deb, cre
-                            else: val_deb, val_cre = deb, -cre
-                            dados.append({"Data": dt, "NF": nf, "Hist": hist, "Deb": val_deb, "Cred": val_cre})
-
-                if f_cod and dados: banco[f_cod] = pd.DataFrame(dados)
-
-                if banco:
-                    out = BytesIO()
-                    with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
-                        wb = writer.book
-                        
-                        f_cent = wb.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
-                        f_moeda = wb.add_format({'num_format': 'R$ #,##0.00', 'border': 1})
-                        f_std = wb.add_format({'border': 1})
-                        f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'valign': 'vcenter', 'border': 1})
-                        f_empresa = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'valign': 'vcenter', 'bg_color': '#D3D3D3', 'border': 1})
-                        f_vde = wb.add_format({'num_format': 'R$ #,##0.00', 'font_color': 'green', 'bold': 1, 'border': 1, 'align': 'center'})
-                        f_vrm = wb.add_format({'num_format': 'R$ #,##0.00', 'font_color': 'red', 'bold': 1, 'border': 1, 'align': 'center'})
-
-                        for cod, df in banco.items():
-                            ws = wb.add_worksheet(str(cod)[:31])
-                            ws.hide_gridlines(2)
-                            ws.ignore_errors({'number_stored_as_text': 'A1:X2000'})
-                            
-                            # LARGURA EXATA DE 2.0 PARA G e H
-                            ws.set_column('A:A', 1); ws.set_column('B:C', 15); ws.set_column('D:D', 45)
-                            ws.set_column('E:F', 18); ws.set_column('G:H', 2.0); ws.set_column('I:L', 18)
-                            
-                            ws.merge_range('B2:L2', f"EMPRESA: {nome_emp}", f_empresa)
-                            ws.merge_range('B4:F4', f_info[cod], f_cab)
-                            ws.merge_range('I4:L4', "CONCILIAÇÃO POR NOTA", f_cab)
-                            
-                            for ci, v in enumerate(["Data","NF","Histórico","Débito","Crédito"]):
-                                ws.write(5, ci+1, v, f_cab)
-                            
-                            row_idx = 6
-                            for ri, row in enumerate(df.values):
-                                ws.write(row_idx+ri, 1, row[0], f_cent); ws.write(row_idx+ri, 2, row[1], f_cent)
-                                ws.write(row_idx+ri, 3, row[2], f_std)
-                                ws.write(row_idx+ri, 4, row[3], f_moeda); ws.write(row_idx+ri, 5, row[4], f_moeda)
-                                last_row = row_idx + ri
-                            
-                            # TOTALIZADOR COM PULO DE UMA LINHA
-                            lt = last_row + 2
-                            ws.write(lt, 3, "TOTALIZADOR:", f_cab)
-                            ws.write(lt, 4, df['Deb'].sum(), f_moeda)
-                            ws.write(lt, 5, df['Cred'].sum(), f_moeda)
-                            
-                            # Conciliação
-                            res = df.groupby("NF").agg({"Deb":"sum","Cred":"sum"}).reset_index()
-                            res["Dif"] = res["Deb"] + res["Cred"]
-                            for ci, v in enumerate(["NF","Deb","Cred","Dif"]): ws.write(5, ci+8, v, f_cab)
-                            for ri, row in enumerate(res.values):
-                                ws.write(6+ri, 8, str(row[0]), f_cent)
-                                ws.write(6+ri, 9, row[1], f_moeda); ws.write(6+ri, 10, row[2], f_moeda); ws.write(6+ri, 11, row[3], f_moeda)
-                            
-                            rf = 7 + len(res)
-                            ws.write(rf, 10, "Saldo Final:", f_cab)
-                            ws.write(rf, 11, s := res["Dif"].sum(), f_vde if s >= 0 else f_vrm)
+                # Identifica Início de um novo Cliente/Fornecedor
+                if "Conta:" in primeira_cel:
+                    if f_cod_atual and dados_acumulados:
+                        banco[f_cod_atual] = pd.DataFrame(dados_acumulados)
                     
-                    st.success("✅ Relatório Lapidado com Sucesso!")
-                    st.download_button("📥 Baixar Relatório ⬇️", out.getvalue(), "relatorio_lapidado.xlsx")
-            except Exception as e:
-                st.error(f"⚠️ Erro no processamento: {e}")
+                    f_cod_atual = str(linha[1]).strip()
+                    nome_entidade = str(linha[5]) if pd.notna(linha[5]) else (str(linha[2]) if pd.notna(linha[2]) else "NOME INDEFINIDO")
+                    f_info[f_cod_atual] = f"{f_cod_atual} - {nome_entidade}"
+                    dados_acumulados = []
+                    continue
+
+                # Processa linhas de valores (verifica se começa com data DD/MM)
+                if len(linha) >= 10 and f_cod_atual:
+                    if re.search(r'\d{2}/\d{2}', primeira_cel):
+                        hist = str(linha[2]).strip()
+                        if "TOTAL" in hist.upper(): continue
+                        
+                        val_deb = to_num(linha[8])
+                        val_cre = to_num(linha[9])
+
+                        if val_deb != 0 or val_cre != 0:
+                            # Identifica a NF ou coloca "SEM NF"
+                            nf_identificada = extrair_nf(hist, linha[1])
+
+                            # APLICAÇÃO DA REGRA DE SINAIS SOLICITADA
+                            if tipo_robo == "Fornecedor":
+                                # Fornecedor: Crédito (+) e Débito (-)
+                                d_final, c_final = -val_deb, val_cre
+                            else:
+                                # Cliente: Crédito (-) e Débito (+)
+                                d_final, c_final = val_deb, -val_cre
+
+                            dados_acumulados.append({
+                                "Data": primeira_cel,
+                                "NF": nf_identificada,
+                                "Hist": hist,
+                                "Deb": d_final,
+                                "Cred": c_final
+                            })
+
+            # Salva o último grupo
+            if f_cod_atual and dados_acumulados:
+                banco[f_cod_atual] = pd.DataFrame(dados_acumulados)
+
+            # 6. Criação do Excel Final
+            if banco:
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    wb = writer.book
+                    
+                    # Formatos de Célula
+                    f_moeda = wb.add_format({'num_format': 'R$ #,##0.00', 'border': 1, 'font_name': 'Arial', 'font_size': 9})
+                    f_cab = wb.add_format({'bold': True, 'bg_color': '#9B8ADE', 'font_color': 'white', 'border': 1, 'align': 'center', 'font_name': 'Arial'})
+                    f_tit = wb.add_format({'bold': True, 'font_size': 12, 'bg_color': '#F2F2F2', 'align': 'center', 'border': 1, 'font_name': 'Arial'})
+                    f_std = wb.add_format({'border': 1, 'font_name': 'Arial', 'font_size': 9})
+                    f_neg = wb.add_format({'num_format': 'R$ #,##0.00', 'border': 1, 'font_color': 'red', 'bold': True})
+                    f_pos = wb.add_format({'num_format': 'R$ #,##0.00', 'border': 1, 'font_color': 'green', 'bold': True})
+
+                    for cod, df in banco.items():
+                        ws = wb.add_worksheet(str(cod)[:31])
+                        ws.hide_gridlines(2)
+                        
+                        # Largura das Colunas
+                        ws.set_column('B:C', 12); ws.set_column('D:D', 40); ws.set_column('E:F', 15); ws.set_column('I:L', 15)
+                        
+                        # Cabeçalho da Planilha
+                        ws.merge_range('B2:F2', f"EMPRESA: {nome_empresa}", f_tit)
+                        ws.merge_range('B3:F3', f_info[cod], f_tit)
+                        
+                        # Tabela de Movimentação (Lado Esquerdo)
+                        headers = ["Data", "NF", "Histórico", "Débito", "Crédito"]
+                        for c_idx, h in enumerate(headers):
+                            ws.write(5, c_idx + 1, h, f_cab)
+                        
+                        for r_idx, row in df.iterrows():
+                            ws.write(6 + r_idx, 1, row['Data'], f_std)
+                            ws.write(6 + r_idx, 2, row['NF'], f_std)
+                            ws.write(6 + r_idx, 3, row['Hist'], f_std)
+                            ws.write(6 + r_idx, 4, row['Deb'], f_moeda)
+                            ws.write(6 + r_idx, 5, row['Cred'], f_moeda)
+
+                        # TABELA DE CONCILIAÇÃO (Lado Direito - Agrupado)
+                        ws.merge_range('I5:L5', "CONCILIAÇÃO (RESUMO POR NF)", f_cab)
+                        resumo = df.groupby("NF", sort=False).agg({"Deb": "sum", "Cred": "sum"}).reset_index()
+                        resumo["Saldo"] = resumo["Deb"] + resumo["Cred"]
+                        
+                        headers_res = ["NF", "Total Déb", "Total Cred", "Diferença"]
+                        for c_idx, h in enumerate(headers_res):
+                            ws.write(6, c_idx + 8, h, f_cab)
+
+                        for r_idx, row in resumo.iterrows():
+                            ws.write(7 + r_idx, 8, row['NF'], f_std)
+                            ws.write(7 + r_idx, 9, row['Deb'], f_moeda)
+                            ws.write(7 + r_idx, 10, row['Cred'], f_moeda)
+                            
+                            # Cor condicional: Vermelho se não zerou, Verde se zerou
+                            fmt_diff = f_moeda
+                            if abs(row['Saldo']) > 0.01: fmt_diff = f_neg
+                            elif abs(row['Saldo']) <= 0.01: fmt_diff = f_pos
+                            
+                            ws.write(7 + r_idx, 11, row['Saldo'], fmt_diff)
+
+                st.success("✨ Relatório lapidado com sucesso!")
+                st.download_button("📥 Baixar Planilha Conciliada", output.getvalue(), "conciliacao_solux_final.xlsx")
+            else:
+                st.warning("🔎 O robô leu o arquivo, mas não encontrou dados de 'Conta:' ou valores válidos.")
+
+        except Exception as e:
+            st.error(f"🔥 Erro no processamento dos dados: {e}")
+
+# Instrução visual caso não tenha arquivo
+if not arquivo:
+    st.info("💡 Por favor, carregue o arquivo no painel lateral para começar.")
