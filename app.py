@@ -1,85 +1,39 @@
-import streamlit as st
 import pandas as pd
 import re
-import io
 
-st.set_page_config(page_title="Robô Conciliador Domínio", layout="wide")
-st.title("🤖 Meu Robô de Conciliação")
+# 1. Abrir a bagunça (Planilha da Domínio)
+df = pd.read_excel('razao_dominio.xlsx')
 
-# Botão para subir o arquivo
-arquivo_subido = st.file_uploader("Arraste o arquivo .xlsx da Domínio aqui", type=['xlsx'])
+# 2. Tirar as colunas vazias e desmesclar (o pandas faz isso lendo linha a linha)
+df = df.dropna(how='all', axis=1)
 
-if arquivo_subido is not None:
-    try:
-        # 1. LER O EXCEL
-        # Tentamos ler sem pular linhas primeiro para descobrir onde estão os dados
-        df_bruto = pd.read_excel(arquivo_subido)
-        
-        # O robô procura a linha onde está escrito "Data" ou "Histórico"
-        linha_cabecalho = 0
-        for i, row in df_bruto.iterrows():
-            if 'Data' in str(row.values) or 'Histórico' in str(row.values):
-                linha_cabecalho = i + 1
-                break
-        
-        # Agora lemos o arquivo do jeito certo
-        df = pd.read_excel(arquivo_subido, skiprows=linha_cabecalho)
-        
-        # 2. LIMPEZA (Tirar o que não é lançamento)
-        # Removemos linhas que não têm histórico ou que são apenas "SALDO ANTERIOR"
-        df = df.dropna(subset=['Histórico'])
-        df = df[~df['Histórico'].str.contains("SALDO ANTERIOR", na=False, case=False)]
+# 3. Criar a coluna "n° nf" do lado do Histórico
+def extrair_nf(texto):
+    texto = str(texto)
+    # Procura por números (ex: NF 123 ou apenas o número)
+    busca = re.findall(r'\b\d+\b', texto)
+    return busca[0] if busca else "sem nf"
 
-        # 3. A REGRA QUE VOCÊ ME ENSINOU (Para Fornecedor)
-        # Crédito é Positivo (+) e Débito é Negativo (-) para o Fornecedor
-        # Mas na sua conta de conciliação: Débito - Crédito mostra o saldo
-        df['Débito'] = pd.to_numeric(df['Débito'], errors='coerce').fillna(0)
-        df['Crédito'] = pd.to_numeric(df['Crédito'], errors='coerce').fillna(0)
-        
-        # Para Fornecedor: Crédito aumenta a dívida (+), Débito diminui (-) 
-        # Seguindo sua regra: Crédito (+) e Débito (-)
-        df['Saldo_Sinalizado'] = df['Crédito'] - df['Débito']
+# Localiza a coluna de Histórico e cria a nova coluna do lado
+idx_hist = df.columns.get_loc('Histórico')
+df.insert(idx_hist + 1, 'n° nf', df['Histórico'].apply(extrair_nf))
 
-        # 4. CRIAR COLUNA DA NOTA (Ao lado do Histórico)
-        def extrair_nota(texto):
-            texto_up = str(texto).upper()
-            # Procura por SAÍDA, PRESTADO ou apenas números de notas
-            match = re.search(r'(?:NFE|NF|S|SAÍDA|PRESTADO)\s*(\d+)', texto_up)
-            if match:
-                return match.group(1)
-            # Se não achar palavras, pega qualquer número grande
-            avulso = re.search(r'(\d{3,})', texto_up)
-            return avulso.group(1) if avulso else "Sem Nota"
+# 4. Ajustar Crédito e Débito conforme sua regra:
+# Para Cliente: Crédito (-) e Débito (+)
+# (Aqui o robô segue sua orientação de sinal)
+df['Diferença'] = df['Débito'] - df['Crédito']
 
-        # Colocando a coluna da nota bem do ladinho do Histórico
-        pos_historico = df.columns.get_loc('Histórico')
-        df.insert(pos_historico + 1, 'Nº DA NOTA', df['Histórico'].apply(extrair_nota))
+# 5. Criar a Tabela Dinâmica (Resumo)
+tabela_dinamica = df.pivot_table(
+    index='n° nf', 
+    values=['Débito', 'Crédito', 'Diferença'], 
+    aggfunc='sum'
+)
 
-        # 5. TABELA DINÂMICA
-        tabela_dinamica = df.groupby('Nº DA NOTA').agg({
-            'Débito': 'sum',
-            'Crédito': 'sum',
-            'Saldo_Sinalizado': 'sum'
-        }).reset_index()
+# 6. Salvar tudo bonitinho
+with pd.ExcelWriter('razao_limpo.xlsx', engine='openpyxl') as writer:
+    df.to_excel(writer, index=False, sheet_name='Dados Limpos')
+    # Pula as colunas após o Saldo para colocar a dinâmica
+    tabela_dinamica.to_excel(writer, sheet_name='Dados Limpos', startcol=len(df.columns) + 2)
 
-        st.success("Consegui ler e organizar tudo!")
-
-        # 6. MOSTRAR NA TELA
-        st.subheader("📊 Tabela Dinâmica por Nota")
-        st.dataframe(tabela_dinamica)
-
-        # Botão para baixar
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            tabela_dinamica.to_excel(writer, index=False)
-        
-        st.download_button(
-            label="📥 Baixar Conciliação em Excel",
-            data=output.getvalue(),
-            file_name="resultado_conciliado.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-    except Exception as e:
-        st.error(f"Erro ao ler o arquivo: {e}")
-        st.info("Dica: Verifique se o arquivo não está protegido por senha.")
+print("Robô: Tarefa concluída! Planilha organizada.")
