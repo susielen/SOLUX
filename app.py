@@ -6,7 +6,7 @@ from io import BytesIO
 # 1. Configuração da Página
 st.set_page_config(page_title="SOLUX", page_icon="💡", layout="wide")
 
-# 2. ESTILO SOLUX
+# 2. ESTILO SOLUX (Layout Lilás e Moderno)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
@@ -31,7 +31,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('O robô está destacando as notas... 🕵️‍♂️🎨'):
+    with st.spinner('O robô está preparando o layout e as cores... 🕵️‍♂️🎨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -61,7 +61,7 @@ if arquivo:
                         try: dt = pd.to_datetime(lin[0]).strftime('%d/%m/%Y')
                         except: dt = str(lin[0])
 
-                        # BUSCA DE NOTA
+                        # BUSCA DE NOTA (LÓGICA SOLUX)
                         h_up = hist.upper()
                         pats = [r'SERVIÇO\s?PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'SAÍDA\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = None
@@ -70,13 +70,12 @@ if arquivo:
                             if m: nf_res = m[0]; break
                         
                         nf = nf_res if nf_res else "S/ N° NF"
-                        sem_nota = True if nf == "S/ N° NF" else False
-
-                        # SINAIS (Conforme solicitado)
+                        
+                        # SINAIS (Cliente: Deb+ Cre- | Fornecedor: Deb- Cre+)
                         if tipo_robo == "Fornecedor": v_deb, v_cre = -deb, cre
                         else: v_deb, v_cre = deb, -cre
                         
-                        dados.append({"Data": dt, "NF": nf, "Hist": hist, "Deb": v_deb, "Cred": v_cre, "SemNota": sem_nota})
+                        dados.append({"Data": dt, "NF": nf, "Hist": hist, "Deb": v_deb, "Cred": v_cre, "Aviso": (nf == "S/ N° NF")})
 
             if f_cod and dados: banco[f_cod] = pd.DataFrame(dados)
 
@@ -84,39 +83,66 @@ if arquivo:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
-                    # FORMATOS
-                    f_m = wb.add_format({'num_format': 'R$ #,##0.00', 'border': 1})
+                    # --- DEFINIÇÃO DE FORMATOS ---
+                    f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'valign': 'vcenter', 'border': 1})
+                    f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
+                    
+                    # Formatos normais
                     f_c = wb.add_format({'align': 'center', 'border': 1})
-                    f_h = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'border': 1})
-                    f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': '#FFFF00'}) # Amarelo Centro
-                    f_ama_m = wb.add_format({'num_format': 'R$ #,##0.00', 'border': 1, 'bg_color': '#FFFF00'}) # Amarelo Moeda
-                    f_ama_s = wb.add_format({'border': 1, 'bg_color': '#FFFF00'}) # Amarelo Texto
+                    f_m = wb.add_format({'num_format': 'R$ #,##0.00', 'border': 1})
+                    f_s = wb.add_format({'border': 1})
+                    
+                    # Formatos Amarelo (#FFFF99)
+                    cor_ama = '#FFFF99'
+                    f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': cor_ama})
+                    f_ama_m = wb.add_format({'num_format': 'R$ #,##0.00', 'border': 1, 'bg_color': cor_ama})
+                    f_ama_s = wb.add_format({'border': 1, 'bg_color': cor_ama})
+                    
+                    f_vde = wb.add_format({'num_format': 'R$ #,##0.00', 'font_color': 'green', 'bold': 1, 'border': 1})
+                    f_vrm = wb.add_format({'num_format': 'R$ #,##0.00', 'font_color': 'red', 'bold': 1, 'border': 1})
 
                     for cod, df in banco.items():
                         ws = wb.add_worksheet(str(cod)[:31])
-                        ws.set_column('B:C', 15); ws.set_column('D:D', 45); ws.set_column('E:F', 18); ws.set_column('I:L', 18)
-                        ws.merge_range('B2:L2', f"EMPRESA: {nome_emp}", wb.add_format({'bold':1, 'align':'center', 'bg_color':'#D3D3D3', 'border':1}))
+                        ws.hide_gridlines(2)
+                        # Largura das colunas
+                        ws.set_column('A:A', 2); ws.set_column('B:C', 15); ws.set_column('D:D', 45); ws.set_column('E:F', 18)
+                        ws.set_column('G:H', 2); ws.set_column('I:L', 18)
+                        
+                        # Cabeçalho da Empresa
+                        ws.merge_range('B2:L2', f"EMPRESA: {nome_emp}", f_emp)
+                        ws.merge_range('B4:F4', f_info[cod], f_cab)
+                        ws.merge_range('I4:L4', "CONCILIAÇÃO POR NOTA", f_cab)
                         
                         # Tabela Razão (Esquerda)
-                        for ci, v in enumerate(["Data","NF","Histórico","Débito","Crédito"]): ws.write(5, ci+1, v, f_h)
+                        for ci, v in enumerate(["Data","NF","Histórico","Débito","Crédito"]): ws.write(5, ci+1, v, f_cab)
                         for ri, r in enumerate(df.values):
-                            # Se for "S/ N° NF", pinta de amarelo
                             fmt_c = f_ama_c if r[5] else f_c
                             fmt_m = f_ama_m if r[5] else f_m
-                            fmt_s = f_ama_s if r[5] else wb.add_format({'border':1})
+                            fmt_s = f_ama_s if r[5] else f_s
                             
-                            ws.write(6+ri, 1, r[0], fmt_c); ws.write(6+ri, 2, r[1], fmt_c)
-                            ws.write(6+ri, 3, r[2], fmt_s); ws.write(6+ri, 4, r[3], fmt_m); ws.write(6+ri, 5, r[4], fmt_m)
+                            ws.write(6+ri, 1, r[0], fmt_c)
+                            ws.write(6+ri, 2, r[1], fmt_c)
+                            ws.write(6+ri, 3, r[2], fmt_s)
+                            ws.write(6+ri, 4, r[3], fmt_m)
+                            ws.write(6+ri, 5, r[4], fmt_m)
+                            row_f = 6+ri
                         
-                        # Tabela Conciliação (Direita) - AGRUPADO NOVAMENTE
+                        # Tabela Conciliação (Direita)
                         res = df.groupby("NF").agg({"Deb":"sum", "Cred":"sum"}).reset_index()
                         res["Dif"] = res["Deb"] + res["Cred"]
-                        for ci, v in enumerate(["NF","Deb","Cred","Dif"]): ws.write(5, ci+8, v, f_h)
+                        for ci, v in enumerate(["NF","Deb","Cred","Dif"]): ws.write(5, ci+8, v, f_cab)
                         for ri, r in enumerate(res.values):
                             ws.write(6+ri, 8, str(r[0]), f_c)
                             ws.write(6+ri, 9, r[1], f_m); ws.write(6+ri, 10, r[2], f_m); ws.write(6+ri, 11, r[3], f_m)
+                            row_f_res = 6+ri
+                        
+                        # Saldo Final
+                        sf_row = max(row_f, row_f_res) + 2
+                        ws.write(sf_row, 10, "Saldo Final:", f_cab)
+                        s = res["Dif"].sum()
+                        ws.write(sf_row, 11, s, f_vde if abs(s) < 0.01 else f_vrm)
 
-                st.success("✅ Relatório gerado! Itens sem nota estão em AMARELO no razão.")
-                st.download_button("📥 Baixar Relatório", out.getvalue(), "relatorio_solux.xlsx")
+                st.success("✅ Relatório gerado com layout completo e destaque amarelo suave!")
+                st.download_button("📥 Baixar Relatório SOLUX", out.getvalue(), "relatorio_solux.xlsx")
         except Exception as e:
             st.error(f"Erro: {e}")
