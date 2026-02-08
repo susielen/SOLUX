@@ -44,7 +44,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('O robô SOLUX está organizando os status... 🕵️‍♂️✨'):
+    with st.spinner('O robô SOLUX está aproximando os totais... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -78,7 +78,6 @@ if arquivo:
                             data_formatada = str(lin[0])
 
                         h_up = hist.upper()
-                        # Lista de busca personalizada com SAÍDA e PRESTADO
                         pats = [r'SERVIÇO\s?PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'SAÍDA\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = None
                         for p in pats:
@@ -87,7 +86,7 @@ if arquivo:
                         
                         nf = nf_res if nf_res else "S/ N° NF"
                         
-                        # Regra de sinais: Fornecedor (C+ / D-) | Cliente (D+ / C-)
+                        # Regra personalizada de crédito/débito
                         v_deb, v_cre = (-deb, cre) if tipo_robo == "Fornecedor" else (deb, -cre)
                         dados.append({"Data": data_formatada, "NF": nf, "Hist": hist, "Deb": v_deb, "Cred": v_cre, "Aviso": (nf == "S/ N° NF")})
 
@@ -97,7 +96,6 @@ if arquivo:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
-                    # Formatos
                     f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'valign': 'vcenter', 'border': 1})
                     f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
                     f_c = wb.add_format({'align': 'center', 'border': 1})
@@ -146,26 +144,24 @@ if arquivo:
                             ws.write_number(6+ri, 9, r[1], f_m)
                             ws.write_number(6+ri, 10, r[2], f_m)
                             ws.write_number(6+ri, 11, r[3], f_m)
-                            
-                            # STATUS MAIÚSCULO: OK ou EM ABERTO
-                            if abs(r[3]) < 0.01: 
-                                ws.write(6+ri, 12, "OK", f_ok)
-                            else: 
-                                ws.write(6+ri, 12, "EM ABERTO", f_aberto)
+                            if abs(r[3]) < 0.01: ws.write(6+ri, 12, "OK", f_ok)
+                            else: ws.write(6+ri, 12, "EM ABERTO", f_aberto)
                             row_f_res = 6+ri
                         
-                        # Saldos uma linha abaixo
-                        final_row = max(row_f_razao, row_f_res) + 2
+                        # Saldos uma linha abaixo (mais perto da tabela)
+                        final_row = max(row_f_razao, row_f_res) + 1
                         
+                        # Saldo do Razão
                         total_razao = df["Deb"].sum() + df["Cred"].sum()
                         ws.write(final_row, 4, "Saldo Razão:", f_cab)
                         ws.write_number(final_row, 5, total_razao, f_vde if abs(total_razao) < 0.01 else f_vrm)
                         
+                        # Saldo da Conciliação
                         total_conc = res["Dif"].sum()
                         ws.write(final_row, 11, "Saldo Final:", f_cab)
                         ws.write_number(final_row, 12, total_conc, f_vde if abs(total_conc) < 0.01 else f_vrm)
 
-                st.success("✅ Tudo pronto! Agora os status estão em maiúsculo.")
+                st.success("✅ Relatório pronto! Saldos posicionados perto da tabela.")
                 st.download_button("📥 Baixar Relatório SOLUX", out.getvalue(), "relatorio_solux.xlsx")
         except Exception as e:
-            st.error(f"Erro ao processar: {e}")          
+            st.error(f"Erro ao processar: {e}")
