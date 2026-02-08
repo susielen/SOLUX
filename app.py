@@ -14,7 +14,6 @@ st.markdown("""
     header[data-testid="stHeader"], [data-testid="stSidebar"] { background-color: #9B8ADE !important; }
     .titulo { font-family: 'Montserrat', sans-serif; color: #4B0082; font-size: 28px; font-weight: 800; text-align: center; padding: 10px; background-color: rgba(230, 224, 255, 0.9); border-radius: 10px; border: 1px solid #9B8ADE; margin-top: -35px; margin-bottom: 25px; }
     
-    /* BOTÃO DE UPLOAD - COR VOLTANDO AO ORIGINAL */
     [data-testid="stFileUploaderDropzone"] {
         background-color: rgba(255, 255, 255, 0.6) !important;
         border: 2px dashed #9B8ADE !important;
@@ -45,7 +44,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('O robô SOLUX está organizando as tabelas... 🕵️‍♂️✨'):
+    with st.spinner('O robô SOLUX está formatando as datas... 📅'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -73,6 +72,12 @@ if arquivo:
                         hist = str(lin[2]).strip()
                         if 'TOTAL' in hist.upper(): continue
                         
+                        # AJUSTE DA DATA PARA DIA/MES/ANO
+                        try:
+                            data_formatada = pd.to_datetime(lin[0]).strftime('%d/%m/%Y')
+                        except:
+                            data_formatada = str(lin[0])
+
                         h_up = hist.upper()
                         pats = [r'SERVIÇO\s?PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'SAÍDA\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = None
@@ -82,7 +87,7 @@ if arquivo:
                         
                         nf = nf_res if nf_res else "S/ N° NF"
                         v_deb, v_cre = (-deb, cre) if tipo_robo == "Fornecedor" else (deb, -cre)
-                        dados.append({"Data": str(lin[0]), "NF": nf, "Hist": hist, "Deb": v_deb, "Cred": v_cre, "Aviso": (nf == "S/ N° NF")})
+                        dados.append({"Data": data_formatada, "NF": nf, "Hist": hist, "Deb": v_deb, "Cred": v_cre, "Aviso": (nf == "S/ N° NF")})
 
             if f_cod and dados: banco[f_cod] = pd.DataFrame(dados)
 
@@ -95,12 +100,9 @@ if arquivo:
                     f_c = wb.add_format({'align': 'center', 'border': 1})
                     f_m = wb.add_format({'num_format': '#,##0.00', 'border': 1})
                     f_s = wb.add_format({'border': 1})
-                    
-                    # Formatos Amarelo solicitado
                     f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': '#FFFF99'})
                     f_ama_m = wb.add_format({'num_format': '#,##0.00', 'border': 1, 'bg_color': '#FFFF99'})
                     f_ama_s = wb.add_format({'border': 1, 'bg_color': '#FFFF99'})
-                    
                     f_vde = wb.add_format({'num_format': '#,##0.00', 'font_color': 'green', 'bold': 1, 'border': 1})
                     f_vrm = wb.add_format({'num_format': '#,##0.00', 'font_color': 'red', 'bold': 1, 'border': 1})
 
@@ -108,7 +110,7 @@ if arquivo:
                         ws = wb.add_worksheet(str(cod)[:31])
                         ws.hide_gridlines(2)
                         
-                        # AJUSTE DE COLUNAS: G e H agora com ~19 pixels (2.14 largura Excel)
+                        # Colunas G e H com ~19 pixels
                         ws.set_column('A:A', 2); ws.set_column('B:C', 15); ws.set_column('D:D', 45); ws.set_column('E:F', 18)
                         ws.set_column('G:H', 2.14) 
                         ws.set_column('I:L', 18)
@@ -122,7 +124,7 @@ if arquivo:
                         for ci, v in enumerate(["Data","NF","Histórico","Débito","Crédito"]): ws.write(5, ci+1, v, f_cab)
                         for ri, r in enumerate(df.values):
                             fmt_c, fmt_m, fmt_s = (f_ama_c, f_ama_m, f_ama_s) if r[5] else (f_c, f_m, f_s)
-                            ws.write(6+ri, 1, r[0], fmt_c)
+                            ws.write(6+ri, 1, r[0], fmt_c) # Data dia/mes/ano
                             try:
                                 if str(r[1]).isdigit(): ws.write_number(6+ri, 2, int(r[1]), fmt_c)
                                 else: ws.write(6+ri, 2, r[1], fmt_c)
@@ -140,15 +142,4 @@ if arquivo:
                                 if str(r[0]).isdigit(): ws.write_number(6+ri, 8, int(r[0]), f_c)
                                 else: ws.write(6+ri, 8, str(r[0]), f_c)
                             except: ws.write(6+ri, 8, str(r[0]), f_c)
-                            ws.write_number(6+ri, 9, r[1], f_m); ws.write_number(6+ri, 10, r[2], f_m); ws.write_number(6+ri, 11, r[3], f_m)
-                            row_f_res = 6+ri
-                        
-                        sf_row = max(row_f, row_f_res) + 2
-                        ws.write(sf_row, 10, "Saldo Final:", f_cab)
-                        s = res["Dif"].sum()
-                        ws.write_number(sf_row, 11, s, f_vde if abs(s) < 0.01 else f_vrm)
-
-                st.success("✅ Layout e cores restaurados! Colunas G e H ajustadas.")
-                st.download_button("📥 Baixar Relatório SOLUX", out.getvalue(), "relatorio_solux.xlsx")
-        except Exception as e:
-            st.error(f"Erro ao processar: {e}")
+                            ws.write_number(6+ri, 9, r[1], f_m); ws.write_number(6+ri, 10, r[2], f_m); ws.write_number(
