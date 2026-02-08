@@ -14,14 +14,13 @@ st.markdown("""
     header[data-testid="stHeader"], [data-testid="stSidebar"] { background-color: #9B8ADE !important; }
     .titulo { font-family: 'Montserrat', sans-serif; color: #4B0082; font-size: 28px; font-weight: 800; text-align: center; padding: 10px; background-color: rgba(230, 224, 255, 0.9); border-radius: 10px; border: 1px solid #9B8ADE; margin-top: -35px; margin-bottom: 25px; }
     
-    /* BOTÃO DE UPLOAD (Ajuste de visibilidade) */
+    /* BOTÃO DE UPLOAD VISÍVEL */
     [data-testid="stFileUploaderDropzone"] {
         background-color: rgba(255, 255, 255, 0.6) !important;
         border: 2px dashed #9B8ADE !important;
         border-radius: 12px !important;
     }
     
-    /* Corrigindo o botão "Browse files" que estava muito branco */
     [data-testid="stFileUploaderDropzone"] button {
         background-color: #9B8ADE !important;
         color: white !important;
@@ -47,7 +46,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('O robô está caprichando no acabamento... 🕵️‍♂️✨'):
+    with st.spinner('O robô está medindo as colunas... 🕵️‍♂️📏'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -78,7 +77,7 @@ if arquivo:
                         except: dt = str(lin[0])
 
                         h_up = hist.upper()
-                        # Lista completa conforme sua necessidade (Prestado, Saída, etc)
+                        # Lista de buscas solicitadas
                         pats = [r'SERVIÇO\s?PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'SAÍDA\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = None
                         for p in pats:
@@ -87,7 +86,7 @@ if arquivo:
                         
                         nf = nf_res if nf_res else "S/ N° NF"
                         
-                        # SINAIS SOLUX: Fornecedor (Crédito +) | Cliente (Crédito -)
+                        # REGRAS DE CRÉDITO/DÉBITO
                         if tipo_robo == "Fornecedor": v_deb, v_cre = -deb, cre
                         else: v_deb, v_cre = deb, -cre
                         
@@ -99,14 +98,13 @@ if arquivo:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
-                    # Cabeçalhos e Formatos
                     f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'border': 1})
                     f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
                     f_c = wb.add_format({'align': 'center', 'border': 1})
                     f_m = wb.add_format({'num_format': '#,##0.00', 'border': 1})
                     f_s = wb.add_format({'border': 1})
                     
-                    # Estilo Amarelo Suave (#FFFF99)
+                    # Destaque Amarelo solicitado
                     cor_ama = '#FFFF99'
                     f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': cor_ama})
                     f_ama_m = wb.add_format({'num_format': '#,##0.00', 'border': 1, 'bg_color': cor_ama})
@@ -119,33 +117,30 @@ if arquivo:
                         ws = wb.add_worksheet(str(cod)[:31])
                         ws.hide_gridlines(2)
                         
-                        # CONFIGURAÇÃO DE COLUNAS (G e H agora são largura 0.5)
+                        # AJUSTE DE COLUNAS: G e H agora com 10 unidades (~2cm)
                         ws.set_column('A:A', 2); ws.set_column('B:C', 15); ws.set_column('D:D', 45); ws.set_column('E:F', 18)
-                        ws.set_column('G:H', 0.5) 
+                        ws.set_column('G:H', 10) 
                         ws.set_column('I:L', 18)
                         
                         ws.merge_range('B2:L2', f"EMPRESA: {nome_emp}", f_emp)
                         ws.merge_range('B4:F4', f_info[cod], f_cab)
                         ws.merge_range('I4:L4', "CONCILIAÇÃO POR NOTA", f_cab)
                         
-                        # Escrever Dados
+                        # Preenchimento do Razão
                         for ci, v in enumerate(["Data","NF","Histórico","Débito","Crédito"]): ws.write(5, ci+1, v, f_cab)
                         for ri, r in enumerate(df.values):
                             fmt_c, fmt_m, fmt_s = (f_ama_c, f_ama_m, f_ama_s) if r[5] else (f_c, f_m, f_s)
                             ws.write(6+ri, 1, r[0], fmt_c)
-                            
-                            # Escrever NF como número (tira o verde)
                             try:
                                 if str(r[1]).isdigit(): ws.write_number(6+ri, 2, int(r[1]), fmt_c)
                                 else: ws.write(6+ri, 2, r[1], fmt_c)
                             except: ws.write(6+ri, 2, r[1], fmt_c)
-                            
                             ws.write(6+ri, 3, r[2], fmt_s)
                             ws.write_number(6+ri, 4, r[3], fmt_m)
                             ws.write_number(6+ri, 5, r[4], fmt_m)
                             row_f = 6+ri
                         
-                        # Resumo Direita
+                        # Resumo Direita (Agrupado por NF)
                         res = df.groupby("NF").agg({"Deb":"sum", "Cred":"sum"}).reset_index()
                         res["Dif"] = res["Deb"] + res["Cred"]
                         for ci, v in enumerate(["NF","Deb","Cred","Dif"]): ws.write(5, ci+8, v, f_cab)
@@ -162,7 +157,7 @@ if arquivo:
                         s = res["Dif"].sum()
                         ws.write_number(sf_row, 11, s, f_vde if abs(s) < 0.01 else f_vrm)
 
-                st.success("✅ Relatório impecável! Botão visível e sem avisos de erro no Excel.")
+                st.success("✅ Relatório pronto com as colunas G e H largas e botão visível!")
                 st.download_button("📥 Baixar Relatório SOLUX", out.getvalue(), "relatorio_solux.xlsx")
         except Exception as e:
             st.error(f"Erro: {e}")
