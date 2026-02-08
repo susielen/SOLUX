@@ -4,9 +4,9 @@ import re
 from io import BytesIO
 
 # 1. Configuração da Página
-st.set_page_config(page_title="SOLUX", page_icon="💡", layout="wide")
+st.set_page_config(page_title="SOLUX 2026", page_icon="💡", layout="wide")
 
-# 2. ESTILO SOLUX
+# 2. ESTILO SOLUX FINAL (Cores e Botão Lilás)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
@@ -28,7 +28,7 @@ st.markdown("""
     [data-testid="stSidebar"] * { color: #FFFFFF !important; font-weight: 600 !important; }
     .stDownloadButton button { background-color: #9B8ADE !important; color: white !important; border-radius: 8px !important; }
     </style>
-    <p class="titulo">💡 SOLUX: Conciliação Inteligente 💡</p>
+    <p class="titulo">💡 SOLUX 2026: Versão Multi-Conciliação 💡</p>
     """, unsafe_allow_html=True)
 
 def to_num(val):
@@ -40,11 +40,12 @@ def to_num(val):
 
 with st.sidebar:
     st.header("⚙️ Painel de Controle")
+    # O usuário escolhe o tipo de conciliação aqui
     tipo_robo = st.radio("Este projeto é de:", ["Cliente", "Fornecedor"])
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('O robô SOLUX está organizando os espaços... 🕵️‍♂️✨'):
+    with st.spinner('O robô SOLUX está processando... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -78,6 +79,7 @@ if arquivo:
                             data_formatada = str(lin[0])
 
                         h_up = hist.upper()
+                        # LISTA DE BUSCA INCLUINDO "SAÍDA" E "PRESTADO"
                         pats = [r'SERVIÇO\s?PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'SAÍDA\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = None
                         for p in pats:
@@ -86,8 +88,14 @@ if arquivo:
                         
                         nf = nf_res if nf_res else "S/ N° NF"
                         
-                        # Regra de sinais conforme user context
-                        v_deb, v_cre = (-deb, cre) if tipo_robo == "Fornecedor" else (deb, -cre)
+                        # REGRA DE SINAIS (User Context):
+                        # Fornecedor: Crédito (+) e Débito (-)
+                        # Cliente: Débito (+) e Crédito (-)
+                        if tipo_robo == "Fornecedor":
+                            v_deb, v_cre = -deb, cre
+                        else:
+                            v_deb, v_cre = deb, -cre
+                            
                         dados.append({"Data": data_formatada, "NF": nf, "Hist": hist, "Deb": v_deb, "Cred": v_cre, "Aviso": (nf == "S/ N° NF")})
 
             if f_cod and dados: banco[f_cod] = pd.DataFrame(dados)
@@ -96,6 +104,7 @@ if arquivo:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
+                    # Estilos
                     f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'valign': 'vcenter', 'border': 1})
                     f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
                     f_c = wb.add_format({'align': 'center', 'border': 1})
@@ -113,17 +122,18 @@ if arquivo:
                         ws = wb.add_worksheet(str(cod)[:31])
                         ws.hide_gridlines(2)
                         
+                        # Colunas G e H com 19 pixels (2.14 largura)
                         ws.set_column('A:A', 2); ws.set_column('B:C', 15); ws.set_column('D:D', 45); ws.set_column('E:F', 18)
-                        ws.set_column('G:H', 2.14) # 19 pixels
+                        ws.set_column('G:H', 2.14) 
                         ws.set_column('I:L', 18); ws.set_column('M:M', 15)
                         
-                        ws.merge_range('B2:M2', f"EMPRESA: {nome_emp}", f_emp)
+                        ws.merge_range('B2:M2', f"EMPRESA: {nome_emp} ({tipo_robo})", f_emp)
                         ws.merge_range('B4:F4', f_info[cod], f_cab)
                         ws.merge_range('I4:M4', "CONCILIAÇÃO POR NOTA", f_cab)
                         
                         ws.ignore_errors({'number_stored_as_text': 'B6:M1000'})
 
-                        # Escreve Dados Razão
+                        # Tabela Razão
                         for ci, v in enumerate(["Data","NF","Histórico","Débito","Crédito"]): ws.write(5, ci+1, v, f_cab)
                         row_f_razao = 5
                         for ri, r in enumerate(df.values):
@@ -135,7 +145,7 @@ if arquivo:
                             ws.write_number(6+ri, 5, r[4], fmt_m)
                             row_f_razao = 6+ri
 
-                        # Escreve Dados Conciliação
+                        # Tabela Conciliação
                         res = df.groupby("NF").agg({"Deb":"sum", "Cred":"sum"}).reset_index()
                         res["Dif"] = res["Deb"] + res["Cred"]
                         for ci, v in enumerate(["NF","Deb","Cred","Diferença", "Status"]): ws.write(5, ci+8, v, f_cab)
@@ -149,19 +159,16 @@ if arquivo:
                             else: ws.write(6+ri, 12, "EM ABERTO", f_aberto)
                             row_f_res = 6+ri
                         
-                        # SALDO DO RAZÃO (Pula uma linha da tabela dele)
-                        row_saldo_razao = row_f_razao + 2
-                        total_razao = df["Deb"].sum() + df["Cred"].sum()
-                        ws.write(row_saldo_razao, 4, "Saldo Razão:", f_cab)
-                        ws.write_number(row_saldo_razao, 5, total_razao, f_vde if abs(total_razao) < 0.01 else f_vrm)
+                        # Saldos Finais individuais com pular linha
+                        ws.write(row_f_razao + 2, 4, "Saldo Razão:", f_cab)
+                        t_r = df["Deb"].sum() + df["Cred"].sum()
+                        ws.write_number(row_f_razao + 2, 5, t_r, f_vde if abs(t_r) < 0.01 else f_vrm)
                         
-                        # SALDO DA CONCILIAÇÃO (Pula uma linha da tabela dela)
-                        row_saldo_conc = row_f_res + 2
-                        total_conc = res["Dif"].sum()
-                        ws.write(row_saldo_conc, 11, "Saldo Final:", f_cab)
-                        ws.write_number(row_saldo_conc, 12, total_conc, f_vde if abs(total_conc) < 0.01 else f_vrm)
+                        ws.write(row_f_res + 2, 11, "Saldo Final:", f_cab)
+                        t_c = res["Dif"].sum()
+                        ws.write_number(row_f_res + 2, 12, t_c, f_vde if abs(t_c) < 0.01 else f_vrm)
 
-                st.success("✅ Ajustado! Saldos posicionados uma linha após o término de cada tabela.")
-                st.download_button("📥 Baixar Relatório SOLUX", out.getvalue(), "relatorio_solux.xlsx")
+                st.success(f"✅ Versão Final para {tipo_robo} processada com sucesso!")
+                st.download_button("📥 Baixar Relatório SOLUX", out.getvalue(), f"conciliacao_{tipo_robo.lower()}.xlsx")
         except Exception as e:
             st.error(f"Erro ao processar: {e}")
