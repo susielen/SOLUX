@@ -4,103 +4,43 @@ import re
 from io import BytesIO
 
 # 1. Configuração da Página
-st.set_page_config(
-    page_title="SOLUX",
-    page_icon="💡",
-    layout="wide"
-)
+st.set_page_config(page_title="SOLUX 2026", page_icon="💡", layout="wide")
 
-# 2. O ESTILO (Lavanda Suave, Título Fino e Botão Camaleão)
+# 2. ESTILO SOLUX FINAL (Cores e Botão Lilás)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
-
-    .stApp {
-        background-color: #F3F0FF; 
-        background-image: url("https://www.transparenttextures.com/patterns/cubes.png");
-        background-attachment: fixed;
-    }
-
-    header[data-testid="stHeader"], [data-testid="stSidebar"] {
-        background-color: #9B8ADE !important;
-    }
-
-    button[kind="headerNoPadding"], .stApp header svg {
-        display: none !important;
-    }
-
-    .titulo {
-        font-family: 'Montserrat', sans-serif;
-        color: #4B0082;
-        font-size: 28px; 
-        font-weight: 800; 
-        text-align: center; 
-        padding: 8px; 
-        background-color: rgba(230, 224, 255, 0.9);
-        border-radius: 10px;
-        border: 1px solid #9B8ADE;
-        margin-top: -35px;
-        margin-bottom: 25px;
-    }
-
-    [data-testid="stSidebar"] * {
-        font-family: 'Montserrat', sans-serif;
-        color: #FFFFFF !important;
-        font-weight: 600 !important;
-    }
-
-    /* BROWSE FILES CAMALEÃO */
-    [data-testid="stFileUploaderDropzone"] button {
-        background-color: #E6E0FF !important;
-        color: #4B0082 !important;
-        border: 1px solid #9B8ADE !important;
-        transition: 0.3s;
-    }
-
-    [data-testid="stFileUploaderDropzone"] button:hover {
-        background-color: #9B8ADE !important;
-        color: white !important;
-    }
-
-    [data-testid="stFileUploaderDropzone"] {
-        background-color: rgba(255, 255, 255, 0.4) !important; 
-        border: 2px dashed #9B8ADE !important;
-    }
-    
-    .stDownloadButton button {
-        background-color: #4B0082 !important;
-        color: white !important;
-        border-radius: 8px !important;
-    }
+    .stApp { background-color: #F3F0FF; background-image: url("https://www.transparenttextures.com/patterns/cubes.png"); background-attachment: fixed; }
+    header[data-testid="stHeader"], [data-testid="stSidebar"] { background-color: #9B8ADE !important; }
+    .titulo { font-family: 'Montserrat', sans-serif; color: #4B0082; font-size: 28px; font-weight: 800; text-align: center; padding: 10px; background-color: rgba(230, 224, 255, 0.9); border-radius: 10px; border: 1px solid #9B8ADE; margin-top: -35px; margin-bottom: 25px; }
+    [data-testid="stFileUploaderDropzone"] { background-color: rgba(255, 255, 255, 0.6) !important; border: 2px dashed #9B8ADE !important; }
+    [data-testid="stFileUploaderDropzone"] button { background-color: #E6E0FF !important; color: #4B0082 !important; border: 1px solid #9B8ADE !important; font-weight: bold !important; }
+    [data-testid="stSidebar"] * { color: #FFFFFF !important; font-weight: 600 !important; }
+    .stDownloadButton button { background-color: #9B8ADE !important; color: white !important; border-radius: 8px !important; }
     </style>
-    
-    <p class="titulo">💡 SOLUX: Seu parceiro na conciliação 💡</p>
+    <p class="titulo">💡 SOLUX 2026: Versão Multi-Conciliação + Dinâmica 💡</p>
     """, unsafe_allow_html=True)
 
-# 3. FUNÇÃO DE NÚMEROS
 def to_num(val):
     try:
         if pd.isna(val) or str(val).strip() == '': return 0.0
-        return float(str(val).replace('.', '').replace(',', '.'))
+        s = str(val).replace('.', '').replace(',', '.')
+        return float(re.sub(r'[^-0-9.]', '', s))
     except: return 0.0
 
-# 4. PAINEL LATERAL
 with st.sidebar:
     st.header("⚙️ Painel de Controle")
     tipo_robo = st.radio("Este projeto é de:", ["Cliente", "Fornecedor"])
-    st.markdown("---")
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
-# 5. LÓGICA DE CONCILIAÇÃO
 if arquivo:
-    with st.spinner('💎 O SOLUX está lapidando os dados para sua Tabela Dinâmica...'):
+    with st.spinner('O robô SOLUX está processando... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
             else:
                 df_bruto = pd.read_excel(arquivo, header=None)
 
-            # Localizar Nome da Empresa
             nome_emp = "EMPRESA"
             for i in range(min(15, len(df_bruto))):
                 if "Empresa:" in str(df_bruto.iloc[i, 0]):
@@ -114,48 +54,96 @@ if arquivo:
                 if "Conta:" in str(lin[0]):
                     if f_cod and dados: banco[f_cod] = pd.DataFrame(dados)
                     f_cod = str(lin[1]).strip()
-                    f_info[f_cod] = f"{f_cod} - {str(lin[5]) if pd.notna(lin[5]) else str(lin[2])}"
+                    f_info[f_cod] = f"{f_cod} - {str(lin[5]) if len(lin) > 5 and pd.notna(lin[5]) else str(lin[2])}"
                     dados = []
-                elif len(lin) > 9:
+                elif len(lin) >= 10 and pd.notna(lin[0]) and any(x in str(lin[0]) for x in ['/', '-']):
                     deb, cre = to_num(lin[8]), to_num(lin[9])
-                    hist = str(lin[2]).strip()
-                    if (deb != 0 or cre != 0) and pd.notna(lin[0]):
+                    if deb != 0 or cre != 0:
+                        hist = str(lin[2]).strip()
                         if 'TOTAL' in hist.upper(): continue
+                        try: data_formatada = pd.to_datetime(lin[0]).strftime('%d/%m/%Y')
+                        except: data_formatada = str(lin[0])
+
+                        h_up = hist.upper()
+                        # LISTA DE BUSCA COM AS PALAVRAS SALVAS (SAÍDA, PRESTADO)
+                        pats = [r'SERVIÇO\s?PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'SAÍDA\s?(\d+)', r'NF\s?(\d+)']
+                        nf_res = None
+                        for p in pats:
+                            m = re.findall(p, h_up)
+                            if m: nf_res = m[0]; break
                         
-                        # BUSCA DE NF NO HISTÓRICO (Se você editou no Excel, a Dinâmica lerá)
-                        busca_nf = re.findall(r'(?:NF|NFE|NOTA|Nf|nfe|Nº|N)\s?(\d+)', hist)
-                        nf = busca_nf[0] if busca_nf else (str(lin[1]).strip() if pd.notna(lin[1]) else "S/N")
+                        nf = nf_res if nf_res else "S/ N° NF"
                         
-                        # REGRA DE SINAIS CONFORME SUA PREFERÊNCIA
-                        if tipo_robo == "Fornecedor": val_deb, val_cre = -deb, cre
-                        else: val_deb, val_cre = deb, -cre
+                        # REGRAS DE CRÉDITO/DÉBITO SALVAS NO CONTEXTO
+                        if tipo_robo == "Fornecedor": v_deb, v_cre = -deb, cre
+                        else: v_deb, v_cre = deb, -cre
                         
-                        dados.append({"Data": str(lin[0]), "NF": nf, "Hist": hist, "Deb": val_deb, "Cred": val_cre})
+                        dados.append({"Data": data_formatada, "NF": nf, "Histórico": hist, "Débito": v_deb, "Crédito": v_cre, "Aviso": (nf == "S/ N° NF")})
 
             if f_cod and dados: banco[f_cod] = pd.DataFrame(dados)
 
             if banco:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
-                    workbook = writer.book
-                    for cod, df_res in banco.items():
-                        sheet_name = str(cod)[:31]
-                        df_res.to_excel(writer, sheet_name=sheet_name, index=False)
-                        
-                        # AQUI ESTÁ O SEGREDO: CRIAR A TABELA OFICIAL NO EXCEL
-                        worksheet = writer.sheets[sheet_name]
-                        (max_row, max_col) = df_res.shape
-                        column_settings = [{'header': column} for column in df_res.columns]
-                        # Cria a tabela que a Dinâmica adora
-                        worksheet.add_table(0, 0, max_row, max_col - 1, {
-                            'columns': column_settings,
-                            'style': 'TableStyleLight 9'
-                        })
-                
-                st.success("✅ Excel gerado! Agora use a Tabela Dinâmica para conciliar.")
-                st.download_button("📥 BAIXAR EXCEL DINÂMICO 💎", out.getvalue(), "solux_conciliacao.xlsx")
+                    wb = writer.book
+                    # ESTILOS MANTIDOS DA SUA VERSÃO
+                    f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'valign': 'vcenter', 'border': 1})
+                    f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
+                    f_c = wb.add_format({'align': 'center', 'border': 1})
+                    f_m = wb.add_format({'num_format': '#,##0.00', 'border': 1})
+                    f_s = wb.add_format({'border': 1})
+                    f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': '#FFFF99'})
+                    f_ama_m = wb.add_format({'num_format': '#,##0.00', 'border': 1, 'bg_color': '#FFFF99'})
+                    f_ama_s = wb.add_format({'border': 1, 'bg_color': '#FFFF99'})
+                    f_vde = wb.add_format({'num_format': '#,##0.00', 'font_color': 'green', 'bold': 1, 'border': 1})
+                    f_vrm = wb.add_format({'num_format': '#,##0.00', 'font_color': 'red', 'bold': 1, 'border': 1})
+                    f_ok = wb.add_format({'align': 'center', 'bold': 1, 'font_color': 'green', 'border': 1})
+                    f_aberto = wb.add_format({'align': 'center', 'bold': 1, 'font_color': '#CC7A00', 'border': 1})
 
+                    for cod, df in banco.items():
+                        ws = wb.add_worksheet(str(cod)[:31])
+                        ws.hide_gridlines(2)
+                        ws.set_column('A:A', 2); ws.set_column('B:C', 15); ws.set_column('D:D', 45); ws.set_column('E:F', 18)
+                        ws.set_column('G:H', 2.14); ws.set_column('I:L', 18); ws.set_column('M:M', 15)
+                        
+                        ws.merge_range('B2:M2', f"EMPRESA: {nome_emp} ({tipo_robo})", f_emp)
+                        ws.merge_range('B4:F4', f_info[cod], f_cab)
+                        ws.merge_range('I4:M4', "CONCILIAÇÃO POR NOTA", f_cab)
+
+                        # --- LÓGICA DA TABELA OFICIAL (Para permitir a Tabela Dinâmica) ---
+                        # Tabela Razão (Lado Esquerdo)
+                        colunas_razao = ["Data", "NF", "Histórico", "Débito", "Crédito"]
+                        for ci, v in enumerate(colunas_razao): ws.write(5, ci+1, v, f_cab)
+                        
+                        for ri, r in enumerate(df.values):
+                            fmt_c, fmt_m, fmt_s = (f_ama_c, f_ama_m, f_ama_s) if r[5] else (f_c, f_m, f_s)
+                            ws.write(6+ri, 1, r[0], fmt_c)
+                            ws.write(6+ri, 2, r[1], fmt_c)
+                            ws.write(6+ri, 3, r[2], fmt_s)
+                            ws.write_number(6+ri, 4, r[3], fmt_m)
+                            ws.write_number(6+ri, 5, r[4], fmt_m)
+                        
+                        # Criando o Objeto Tabela no Razão
+                        ws.add_table(5, 1, 6+len(df)-1, 5, {
+                            'name': f'TabelaRazao_{re.sub(r"[^a-zA-Z0-9]", "", cod)}',
+                            'columns': [{'header': c} for c in colunas_razao],
+                            'style': 'TableStyleMedium 2'
+                        })
+
+                        # Tabela Conciliação (Lado Direito)
+                        res = df.groupby("NF").agg({"Débito":"sum", "Crédito":"sum"}).reset_index()
+                        res["Dif"] = res["Débito"] + res["Crédito"]
+                        colunas_conc = ["NF", "Débito", "Crédito", "Diferença", "Status"]
+                        for ci, v in enumerate(colunas_conc): ws.write(5, ci+8, v, f_cab)
+                        
+                        for ri, r in enumerate(res.values):
+                            ws.write(6+ri, 8, str(r[0]), f_c)
+                            ws.write_number(6+ri, 9, r[1], f_m)
+                            ws.write_number(6+ri, 10, r[2], f_m)
+                            ws.write_number(6+ri, 11, r[3], f_m)
+                            ws.write(6+ri, 12, "OK" if abs(r[3]) < 0.01 else "EM ABERTO", f_ok if abs(r[3]) < 0.01 else f_aberto)
+
+                st.success(f"✅ Versão 'Dinâmica' para {tipo_robo} processada!")
+                st.download_button("📥 Baixar Relatório SOLUX", out.getvalue(), f"conciliacao_{tipo_robo.lower()}_dinamica.xlsx")
         except Exception as e:
-            st.error(f"Erro: {e}")
-else:
-    st.info("👋 O SOLUX está esperando o arquivo para organizar suas tabelas!")
+            st.error(f"Erro ao processar: {e}")
