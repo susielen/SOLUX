@@ -6,7 +6,7 @@ from io import BytesIO
 # 1. Configuração da Página
 st.set_page_config(page_title="SOLUX 2026", page_icon="💡", layout="wide")
 
-# 2. ESTILO SOLUX FINAL
+# 2. ESTILO SOLUX
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
@@ -18,7 +18,7 @@ st.markdown("""
     [data-testid="stSidebar"] * { color: #FFFFFF !important; font-weight: 600 !important; }
     .stDownloadButton button { background-color: #9B8ADE !important; color: white !important; border-radius: 8px !important; }
     </style>
-    <p class="titulo">💡 SOLUX 2026: Versão Multi-Conciliação + Dinâmica 💡</p>
+    <p class="titulo">💡 SOLUX 2026: Conciliação Inteligente 💡</p>
     """, unsafe_allow_html=True)
 
 def to_num(val):
@@ -34,7 +34,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('O robô SOLUX está processando... 🕵️‍♂️✨'):
+    with st.spinner('O robô SOLUX está trazendo o Razão de volta... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -46,8 +46,7 @@ if arquivo:
                 if "Empresa:" in str(df_bruto.iloc[i, 0]):
                     nome_emp = str(df_bruto.iloc[i, 2]); break
 
-            banco = {}
-            f_info = {}
+            banco, f_info = {}, {}
             f_cod, dados = None, []
 
             for i in range(len(df_bruto)):
@@ -62,10 +61,9 @@ if arquivo:
                     if deb != 0 or cre != 0:
                         hist = str(lin[2]).strip()
                         if 'TOTAL' in hist.upper(): continue
-                        
                         try: data_formatada = pd.to_datetime(lin[0]).strftime('%d/%m/%Y')
                         except: data_formatada = str(lin[0])
-
+                        
                         h_up = hist.upper()
                         pats = [r'SERVIÇO\s?PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'SAÍDA\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = None
@@ -74,52 +72,48 @@ if arquivo:
                             if m: nf_res = m[0]; break
                         
                         nf = nf_res if nf_res else "S/ N° NF"
-                        
-                        if tipo_robo == "Fornecedor": v_deb, v_cre = -deb, cre
-                        else: v_deb, v_cre = deb, -cre
-                        
+                        v_deb, v_cre = (-deb, cre) if tipo_robo == "Fornecedor" else (deb, -cre)
                         dados.append({"Data": data_formatada, "NF": nf, "Histórico": hist, "Débito": v_deb, "Crédito": v_cre, "Aviso": (nf == "S/ N° NF")})
 
             if f_cod and dados: banco[f_cod] = pd.DataFrame(dados)
 
             if banco:
-                output = BytesIO()
-                # O segredo é usar o xlsxwriter aqui com cuidado
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                out = BytesIO()
+                with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
                     f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'border': 1})
                     f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
                     f_c = wb.add_format({'align': 'center', 'border': 1})
                     f_m = wb.add_format({'num_format': '#,##0.00', 'border': 1})
-                    f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': '#FFFF99'})
                     f_ama_m = wb.add_format({'num_format': '#,##0.00', 'border': 1, 'bg_color': '#FFFF99'})
                     f_ama_s = wb.add_format({'border': 1, 'bg_color': '#FFFF99'})
 
                     for cod, df in banco.items():
-                        aba_nome = str(cod)[:31]
-                        df.to_excel(writer, sheet_name=aba_nome, index=False, startrow=5, startcol=1)
-                        ws = writer.sheets[aba_nome]
-                        ws.hide_gridlines(2)
-                        
-                        ws.merge_range('B2:M2', f"EMPRESA: {nome_emp} ({tipo_robo})", f_emp)
+                        ws = wb.add_worksheet(str(cod)[:31])
+                        ws.set_column('B:F', 18); ws.set_column('D:D', 40)
+                        ws.merge_range('B2:F2', f"EMPRESA: {nome_emp} ({tipo_robo})", f_emp)
                         ws.merge_range('B4:F4', f_info[cod], f_cab)
+
+                        # Desenha o Cabeçalho do Razão
+                        for ci, v in enumerate(["Data","NF","Histórico","Débito","Crédito"]):
+                            ws.write(5, ci+1, v, f_cab)
+
+                        # Preenche os dados do Razão
+                        for ri, r in enumerate(df.values):
+                            fmt_m, fmt_s = (f_ama_m, f_ama_s) if r[5] else (f_m, f_c)
+                            ws.write(6+ri, 1, r[0], fmt_s)
+                            ws.write(6+ri, 2, r[1], fmt_s)
+                            ws.write(6+ri, 3, r[2], fmt_s)
+                            ws.write_number(6+ri, 4, r[3], fmt_m)
+                            ws.write_number(6+ri, 5, r[4], fmt_m)
                         
-                        # Criando a Tabela Oficial (com nome limpo para o Excel não travar)
-                        nome_tabela = f"Tabela_{re.sub(r'[^a-zA-Z0-9]', '', str(cod))}"
-                        (max_row, max_col) = df.shape
-                        ws.add_table(5, 1, 5 + max_row, max_col, {
-                            'name': nome_tabela,
+                        # Transforma em Tabela Oficial para a Dinâmica funcionar
+                        ws.add_table(5, 1, 6+len(df)-1, 5, {
                             'style': 'TableStyleMedium 2',
-                            'columns': [{'header': c} for c in df.columns]
+                            'columns': [{'header': 'Data'}, {'header': 'NF'}, {'header': 'Histórico'}, {'header': 'Débito'}, {'header': 'Crédito'}]
                         })
-                
-                # Prepara o botão de download
-                st.success(f"✅ Arquivo pronto para {tipo_robo}!")
-                st.download_button(
-                    label="📥 Baixar Relatório SOLUX",
-                    data=output.getvalue(),
-                    file_name=f"conciliacao_{tipo_robo.lower()}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+
+                st.success("✅ Relatório pronto!")
+                st.download_button("📥 Baixar Relatório SOLUX", out.getvalue(), f"razao_{tipo_robo.lower()}.xlsx")
         except Exception as e:
-            st.error(f"Erro ao processar: {e}")
+            st.error(f"Erro: {e}")
