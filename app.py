@@ -18,7 +18,7 @@ st.markdown("""
     [data-testid="stSidebar"] * { color: #FFFFFF !important; font-weight: 600 !important; }
     .stDownloadButton button { background-color: #9B8ADE !important; color: white !important; border-radius: 8px !important; }
     </style>
-    <p class="titulo">💡 SOLUX 2026: Conciliação Dinâmica 💡</p>
+    <p class="titulo">💡 SOLUX 2026: Conciliação Automática Real 💡</p>
     """, unsafe_allow_html=True)
 
 def to_num(val):
@@ -34,7 +34,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('O robô SOLUX está organizando as colunas... 🕵️‍♂️✨'):
+    with st.spinner('O robô SOLUX está instalando as fórmulas mágicas... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -51,15 +51,13 @@ if arquivo:
                 lin = df_bruto.iloc[i]
                 if "Conta:" in str(lin[0]):
                     f_cod = str(lin[1]).strip()
-                    dados = []
-                    banco[f_cod] = {"info": f"{f_cod} - {str(lin[5]) if len(lin) > 5 else str(lin[2])}", "df": []}
+                    banco[f_cod] = {"info": f"{f_cod}", "df": []}
                 elif len(lin) >= 10 and pd.notna(lin[0]) and any(x in str(lin[0]) for x in ['/', '-']):
                     deb, cre = to_num(lin[8]), to_num(lin[9])
                     if deb != 0 or cre != 0:
                         hist = str(lin[2]).strip()
                         if 'TOTAL' in hist.upper(): continue
                         
-                        # BUSCA DE NF
                         h_up = hist.upper()
                         pats = [r'SERVIÇO\s?PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'SAÍDA\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = "S/N"
@@ -74,46 +72,47 @@ if arquivo:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
-                    f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'border': 1})
+                    f_cab = wb.add_format({'bold': 1, 'bg_color': '#9B8ADE', 'font_color': 'white', 'border': 1, 'align': 'center'})
                     f_m = wb.add_format({'num_format': '#,##0.00', 'border': 1})
-                    f_c = wb.add_format({'align': 'center', 'border': 1})
+                    f_c = wb.add_format({'border': 1, 'align': 'center'})
 
                     for cod, conteudo in banco.items():
                         df = pd.DataFrame(conteudo["df"])
                         if df.empty: continue
                         
-                        aba = str(cod)[:31]
-                        ws = wb.add_worksheet(aba)
-                        ws.set_column('B:G', 18); ws.set_column('C:C', 40)
+                        ws = wb.add_worksheet(str(cod)[:31])
+                        ws.set_column('B:G', 18); ws.set_column('C:C', 40); ws.set_column('I:L', 18)
                         
-                        # 1. Escreve o RAZÃO com a nova coluna NF_Ajustada
-                        ws.write('B2', f"EMPRESA: {nome_emp} ({tipo_robo})", wb.add_format({'bold':1}))
+                        # Escreve o Razão
                         headers = ["Data", "Histórico", "NF_Ajustada", "Débito", "Crédito"]
                         for ci, v in enumerate(headers): ws.write(5, ci+1, v, f_cab)
                         
                         for ri, r in enumerate(df.values):
                             ws.write(6+ri, 1, r[0], f_c)
                             ws.write(6+ri, 2, r[1], f_c)
-                            ws.write(6+ri, 3, r[2], f_c) # NF_Ajustada
+                            ws.write(6+ri, 3, r[2], f_c) # Esta é a coluna que você vai editar no Excel
                             ws.write_number(6+ri, 4, r[3], f_m)
                             ws.write_number(6+ri, 5, r[4], f_m)
 
-                        # 2. Escreve a CONCILIAÇÃO (Tabela Dinâmica Manual) ao lado
-                        res = df.groupby("NF_Ajustada").agg({"Débito":"sum", "Crédito":"sum"}).reset_index()
-                        res["Diferença"] = res["Débito"] + res["Crédito"]
-                        
-                        ws.write(5, 8, "NF (Conciliação)", f_cab)
+                        # A MÁGICA: TABELA DE CONCILIAÇÃO COM FÓRMULAS
+                        nfs_unicas = df["NF_Ajustada"].unique()
+                        ws.write(5, 8, "NF (Resumo)", f_cab)
                         ws.write(5, 9, "Soma Débito", f_cab)
                         ws.write(5, 10, "Soma Crédito", f_cab)
                         ws.write(5, 11, "Diferença", f_cab)
 
-                        for ri, r in enumerate(res.values):
-                            ws.write(6+ri, 8, str(r[0]), f_c)
-                            ws.write_number(6+ri, 9, r[1], f_m)
-                            ws.write_number(6+ri, 10, r[2], f_m)
-                            ws.write_number(6+ri, 11, r[3], f_m)
+                        for ri, nf in enumerate(nfs_unicas):
+                            row_idx = 7 + ri
+                            ws.write(row_idx-1, 8, nf, f_c)
+                            
+                            # Fórmulas SUMIF (SOMASE) - Elas olham para a coluna D (NF_Ajustada) e somam E (Deb) e F (Cre)
+                            # Se você mudar a NF na coluna D, o resultado aqui muda na hora!
+                            razao_nf_range = f"$D$7:$D${6+len(df)}"
+                            ws.write_formula(row_idx-1, 9, f'=SUMIF({razao_nf_range}, I{row_idx}, $E$7:$E${6+len(df)})', f_m)
+                            ws.write_formula(row_idx-1, 10, f'=SUMIF({razao_nf_range}, I{row_idx}, $F$7:$F${6+len(df)})', f_m)
+                            ws.write_formula(row_idx-1, 11, f'=J{row_idx}+K{row_idx}', f_m)
 
-                st.success("✅ Razão e Tabela de Conciliação gerados!")
-                st.download_button("📥 Baixar Relatório", out.getvalue(), "solux_dinamico.xlsx")
+                st.success("✅ Excel 'Vivo' gerado com sucesso!")
+                st.download_button("📥 Baixar Relatório", out.getvalue(), "solux_viva.xlsx")
         except Exception as e:
             st.error(f"Erro: {e}")
