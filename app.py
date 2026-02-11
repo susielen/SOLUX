@@ -6,7 +6,7 @@ from io import BytesIO
 # 1. Configuração da Página
 st.set_page_config(page_title="SOLUX 2026", page_icon="💡", layout="wide")
 
-# 2. ESTILO SOLUX FINAL (Cores e Botão Lilás)
+# 2. ESTILO SOLUX FINAL
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
@@ -46,7 +46,8 @@ if arquivo:
                 if "Empresa:" in str(df_bruto.iloc[i, 0]):
                     nome_emp = str(df_bruto.iloc[i, 2]); break
 
-            banco, f_info = {}, {}
+            banco = {}
+            f_info = {}
             f_cod, dados = None, []
 
             for i in range(len(df_bruto)):
@@ -61,11 +62,11 @@ if arquivo:
                     if deb != 0 or cre != 0:
                         hist = str(lin[2]).strip()
                         if 'TOTAL' in hist.upper(): continue
+                        
                         try: data_formatada = pd.to_datetime(lin[0]).strftime('%d/%m/%Y')
                         except: data_formatada = str(lin[0])
 
                         h_up = hist.upper()
-                        # LISTA DE BUSCA COM AS PALAVRAS SALVAS (SAÍDA, PRESTADO)
                         pats = [r'SERVIÇO\s?PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'SAÍDA\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = None
                         for p in pats:
@@ -74,7 +75,6 @@ if arquivo:
                         
                         nf = nf_res if nf_res else "S/ N° NF"
                         
-                        # REGRAS DE CRÉDITO/DÉBITO SALVAS NO CONTEXTO
                         if tipo_robo == "Fornecedor": v_deb, v_cre = -deb, cre
                         else: v_deb, v_cre = deb, -cre
                         
@@ -83,67 +83,43 @@ if arquivo:
             if f_cod and dados: banco[f_cod] = pd.DataFrame(dados)
 
             if banco:
-                out = BytesIO()
-                with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
+                output = BytesIO()
+                # O segredo é usar o xlsxwriter aqui com cuidado
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                     wb = writer.book
-                    # ESTILOS MANTIDOS DA SUA VERSÃO
-                    f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'valign': 'vcenter', 'border': 1})
+                    f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'border': 1})
                     f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
                     f_c = wb.add_format({'align': 'center', 'border': 1})
                     f_m = wb.add_format({'num_format': '#,##0.00', 'border': 1})
-                    f_s = wb.add_format({'border': 1})
                     f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': '#FFFF99'})
                     f_ama_m = wb.add_format({'num_format': '#,##0.00', 'border': 1, 'bg_color': '#FFFF99'})
                     f_ama_s = wb.add_format({'border': 1, 'bg_color': '#FFFF99'})
-                    f_vde = wb.add_format({'num_format': '#,##0.00', 'font_color': 'green', 'bold': 1, 'border': 1})
-                    f_vrm = wb.add_format({'num_format': '#,##0.00', 'font_color': 'red', 'bold': 1, 'border': 1})
-                    f_ok = wb.add_format({'align': 'center', 'bold': 1, 'font_color': 'green', 'border': 1})
-                    f_aberto = wb.add_format({'align': 'center', 'bold': 1, 'font_color': '#CC7A00', 'border': 1})
 
                     for cod, df in banco.items():
-                        ws = wb.add_worksheet(str(cod)[:31])
+                        aba_nome = str(cod)[:31]
+                        df.to_excel(writer, sheet_name=aba_nome, index=False, startrow=5, startcol=1)
+                        ws = writer.sheets[aba_nome]
                         ws.hide_gridlines(2)
-                        ws.set_column('A:A', 2); ws.set_column('B:C', 15); ws.set_column('D:D', 45); ws.set_column('E:F', 18)
-                        ws.set_column('G:H', 2.14); ws.set_column('I:L', 18); ws.set_column('M:M', 15)
                         
                         ws.merge_range('B2:M2', f"EMPRESA: {nome_emp} ({tipo_robo})", f_emp)
                         ws.merge_range('B4:F4', f_info[cod], f_cab)
-                        ws.merge_range('I4:M4', "CONCILIAÇÃO POR NOTA", f_cab)
-
-                        # --- LÓGICA DA TABELA OFICIAL (Para permitir a Tabela Dinâmica) ---
-                        # Tabela Razão (Lado Esquerdo)
-                        colunas_razao = ["Data", "NF", "Histórico", "Débito", "Crédito"]
-                        for ci, v in enumerate(colunas_razao): ws.write(5, ci+1, v, f_cab)
                         
-                        for ri, r in enumerate(df.values):
-                            fmt_c, fmt_m, fmt_s = (f_ama_c, f_ama_m, f_ama_s) if r[5] else (f_c, f_m, f_s)
-                            ws.write(6+ri, 1, r[0], fmt_c)
-                            ws.write(6+ri, 2, r[1], fmt_c)
-                            ws.write(6+ri, 3, r[2], fmt_s)
-                            ws.write_number(6+ri, 4, r[3], fmt_m)
-                            ws.write_number(6+ri, 5, r[4], fmt_m)
-                        
-                        # Criando o Objeto Tabela no Razão
-                        ws.add_table(5, 1, 6+len(df)-1, 5, {
-                            'name': f'TabelaRazao_{re.sub(r"[^a-zA-Z0-9]", "", cod)}',
-                            'columns': [{'header': c} for c in colunas_razao],
-                            'style': 'TableStyleMedium 2'
+                        # Criando a Tabela Oficial (com nome limpo para o Excel não travar)
+                        nome_tabela = f"Tabela_{re.sub(r'[^a-zA-Z0-9]', '', str(cod))}"
+                        (max_row, max_col) = df.shape
+                        ws.add_table(5, 1, 5 + max_row, max_col, {
+                            'name': nome_tabela,
+                            'style': 'TableStyleMedium 2',
+                            'columns': [{'header': c} for c in df.columns]
                         })
-
-                        # Tabela Conciliação (Lado Direito)
-                        res = df.groupby("NF").agg({"Débito":"sum", "Crédito":"sum"}).reset_index()
-                        res["Dif"] = res["Débito"] + res["Crédito"]
-                        colunas_conc = ["NF", "Débito", "Crédito", "Diferença", "Status"]
-                        for ci, v in enumerate(colunas_conc): ws.write(5, ci+8, v, f_cab)
-                        
-                        for ri, r in enumerate(res.values):
-                            ws.write(6+ri, 8, str(r[0]), f_c)
-                            ws.write_number(6+ri, 9, r[1], f_m)
-                            ws.write_number(6+ri, 10, r[2], f_m)
-                            ws.write_number(6+ri, 11, r[3], f_m)
-                            ws.write(6+ri, 12, "OK" if abs(r[3]) < 0.01 else "EM ABERTO", f_ok if abs(r[3]) < 0.01 else f_aberto)
-
-                st.success(f"✅ Versão 'Dinâmica' para {tipo_robo} processada!")
-                st.download_button("📥 Baixar Relatório SOLUX", out.getvalue(), f"conciliacao_{tipo_robo.lower()}_dinamica.xlsx")
+                
+                # Prepara o botão de download
+                st.success(f"✅ Arquivo pronto para {tipo_robo}!")
+                st.download_button(
+                    label="📥 Baixar Relatório SOLUX",
+                    data=output.getvalue(),
+                    file_name=f"conciliacao_{tipo_robo.lower()}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
         except Exception as e:
             st.error(f"Erro ao processar: {e}")
