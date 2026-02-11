@@ -18,7 +18,7 @@ st.markdown("""
     [data-testid="stSidebar"] * { color: #FFFFFF !important; font-weight: 600 !important; }
     .stDownloadButton button { background-color: #9B8ADE !important; color: white !important; border-radius: 8px !important; }
     </style>
-    <p class="titulo">💡 SOLUX 2026: Conciliação Automática Real 💡</p>
+    <p class="titulo">💡 SOLUX 2026: Versão Multi-Conciliação Dinâmica 💡</p>
     """, unsafe_allow_html=True)
 
 def to_num(val):
@@ -34,7 +34,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('O robô SOLUX está instalando as fórmulas mágicas... 🕵️‍♂️✨'):
+    with st.spinner('O robô SOLUX está processando as fórmulas dinâmicas... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -46,73 +46,100 @@ if arquivo:
                 if "Empresa:" in str(df_bruto.iloc[i, 0]):
                     nome_emp = str(df_bruto.iloc[i, 2]); break
 
-            banco = {}
+            banco, f_info = {}, {}
+            f_cod, dados = None, []
+
             for i in range(len(df_bruto)):
                 lin = df_bruto.iloc[i]
                 if "Conta:" in str(lin[0]):
+                    if f_cod and dados: banco[f_cod] = pd.DataFrame(dados)
                     f_cod = str(lin[1]).strip()
-                    banco[f_cod] = {"info": f"{f_cod}", "df": []}
+                    f_info[f_cod] = f"{f_cod} - {str(lin[5]) if len(lin) > 5 and pd.notna(lin[5]) else str(lin[2])}"
+                    dados = []
                 elif len(lin) >= 10 and pd.notna(lin[0]) and any(x in str(lin[0]) for x in ['/', '-']):
                     deb, cre = to_num(lin[8]), to_num(lin[9])
                     if deb != 0 or cre != 0:
                         hist = str(lin[2]).strip()
                         if 'TOTAL' in hist.upper(): continue
                         
+                        try: data_formatada = pd.to_datetime(lin[0]).strftime('%d/%m/%Y')
+                        except: data_formatada = str(lin[0])
+
                         h_up = hist.upper()
                         pats = [r'SERVIÇO\s?PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'SAÍDA\s?(\d+)', r'NF\s?(\d+)']
-                        nf_res = "S/N"
+                        nf_res = None
                         for p in pats:
                             m = re.findall(p, h_up)
                             if m: nf_res = m[0]; break
                         
+                        nf = nf_res if nf_res else "S/ N° NF"
                         v_deb, v_cre = (-deb, cre) if tipo_robo == "Fornecedor" else (deb, -cre)
-                        banco[f_cod]["df"].append({"Data": str(lin[0]), "Histórico": hist, "NF_Ajustada": nf_res, "Débito": v_deb, "Crédito": v_cre})
+                        
+                        dados.append({"Data": data_formatada, "NF": nf, "Hist": hist, "Deb": v_deb, "Cred": v_cre, "Aviso": (nf == "S/ N° NF")})
+
+            if f_cod and dados: banco[f_cod] = pd.DataFrame(dados)
 
             if banco:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
-                    f_cab = wb.add_format({'bold': 1, 'bg_color': '#9B8ADE', 'font_color': 'white', 'border': 1, 'align': 'center'})
+                    # ESTILOS MANTIDOS
+                    f_cab = wb.add_format({'bold': 1, 'bg_color': '#E6E0FF', 'align': 'center', 'valign': 'vcenter', 'border': 1})
+                    f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
+                    f_c = wb.add_format({'align': 'center', 'border': 1})
                     f_m = wb.add_format({'num_format': '#,##0.00', 'border': 1})
-                    f_c = wb.add_format({'border': 1, 'align': 'center'})
+                    f_vde = wb.add_format({'num_format': '#,##0.00', 'font_color': 'green', 'bold': 1, 'border': 1})
+                    f_vrm = wb.add_format({'num_format': '#,##0.00', 'font_color': 'red', 'bold': 1, 'border': 1})
 
-                    for cod, conteudo in banco.items():
-                        df = pd.DataFrame(conteudo["df"])
-                        if df.empty: continue
-                        
+                    for cod, df in banco.items():
                         ws = wb.add_worksheet(str(cod)[:31])
-                        ws.set_column('B:G', 18); ws.set_column('C:C', 40); ws.set_column('I:L', 18)
+                        ws.hide_gridlines(2)
                         
-                        # Escreve o Razão
-                        headers = ["Data", "Histórico", "NF_Ajustada", "Débito", "Crédito"]
-                        for ci, v in enumerate(headers): ws.write(5, ci+1, v, f_cab)
+                        # Colunas: A(2), B(12), C(12), D(45), E(15), F-G(18), H-I(2.14), J-M(18)
+                        ws.set_column('A:A', 2); ws.set_column('B:C', 12); ws.set_column('D:D', 45)
+                        ws.set_column('E:E', 15); ws.set_column('F:G', 18); ws.set_column('H:I', 2.14)
+                        ws.set_column('J:M', 18); ws.set_column('N:N', 15)
+
+                        ws.merge_range('B2:N2', f"EMPRESA: {nome_emp} ({tipo_robo})", f_emp)
+                        ws.merge_range('B4:G4', f_info[cod], f_cab)
+                        ws.merge_range('J4:N4', "CONCILIAÇÃO POR NOTA (DINÂMICA)", f_cab)
+
+                        # Tabela Razão com Coluna Nova (NF_AJUSTADA na Coluna E)
+                        headers_razao = ["Data", "NF Original", "Histórico", "NF_AJUSTADA", "Débito", "Crédito"]
+                        for ci, v in enumerate(headers_razao): ws.write(5, ci+1, v, f_cab)
                         
                         for ri, r in enumerate(df.values):
-                            ws.write(6+ri, 1, r[0], f_c)
-                            ws.write(6+ri, 2, r[1], f_c)
-                            ws.write(6+ri, 3, r[2], f_c) # Esta é a coluna que você vai editar no Excel
-                            ws.write_number(6+ri, 4, r[3], f_m)
-                            ws.write_number(6+ri, 5, r[4], f_m)
-
-                        # A MÁGICA: TABELA DE CONCILIAÇÃO COM FÓRMULAS
-                        nfs_unicas = df["NF_Ajustada"].unique()
-                        ws.write(5, 8, "NF (Resumo)", f_cab)
-                        ws.write(5, 9, "Soma Débito", f_cab)
-                        ws.write(5, 10, "Soma Crédito", f_cab)
-                        ws.write(5, 11, "Diferença", f_cab)
-
+                            ws.write(6+ri, 1, r[0], f_c) # Data
+                            ws.write(6+ri, 2, r[1], f_c) # NF Original
+                            ws.write(6+ri, 3, r[2], f_c) # Histórico
+                            ws.write(6+ri, 4, r[1], f_c) # NF_AJUSTADA (Começa igual a NF original)
+                            ws.write_number(6+ri, 5, r[3], f_m) # Débito
+                            ws.write_number(6+ri, 6, r[4], f_m) # Crédito
+                        
+                        last_row = 6 + len(df)
+                        
+                        # Tabela Conciliação com FÓRMULAS (Lado Direito)
+                        nfs_unicas = df["NF"].unique()
+                        headers_conc = ["NF", "Deb (Soma)", "Cred (Soma)", "Diferença", "Status"]
+                        for ci, v in enumerate(headers_conc): ws.write(5, ci+9, v, f_cab)
+                        
                         for ri, nf in enumerate(nfs_unicas):
-                            row_idx = 7 + ri
-                            ws.write(row_idx-1, 8, nf, f_c)
+                            curr_row = 7 + ri
+                            ws.write(curr_row-1, 9, nf, f_c)
                             
-                            # Fórmulas SUMIF (SOMASE) - Elas olham para a coluna D (NF_Ajustada) e somam E (Deb) e F (Cre)
-                            # Se você mudar a NF na coluna D, o resultado aqui muda na hora!
-                            razao_nf_range = f"$D$7:$D${6+len(df)}"
-                            ws.write_formula(row_idx-1, 9, f'=SUMIF({razao_nf_range}, I{row_idx}, $E$7:$E${6+len(df)})', f_m)
-                            ws.write_formula(row_idx-1, 10, f'=SUMIF({razao_nf_range}, I{row_idx}, $F$7:$F${6+len(df)})', f_m)
-                            ws.write_formula(row_idx-1, 11, f'=J{row_idx}+K{row_idx}', f_m)
+                            # Fórmulas SOMASE: Olha para a coluna E (NF_AJUSTADA) e soma F (Deb) e G (Cred)
+                            # Se você mudar a NF na coluna E, o resultado aqui muda sozinho!
+                            range_ajuste = f"$E$7:$E${last_row}"
+                            ws.write_formula(curr_row-1, 10, f'=SUMIF({range_ajuste}, J{curr_row}, $F$7:$F${last_row})', f_m)
+                            ws.write_formula(curr_row-1, 11, f'=SUMIF({range_ajuste}, J{curr_row}, $G$7:$G${last_row})', f_m)
+                            ws.write_formula(curr_row-1, 12, f'=K{curr_row}+L{curr_row}', f_m)
+                            ws.write_formula(curr_row-1, 13, f'=IF(ABS(M{curr_row})<0.01, "OK", "EM ABERTO")', f_c)
 
-                st.success("✅ Excel 'Vivo' gerado com sucesso!")
-                st.download_button("📥 Baixar Relatório", out.getvalue(), "solux_viva.xlsx")
+                        # Saldos Finais
+                        ws.write(last_row + 1, 5, "Saldo Razão:", f_cab)
+                        ws.write_formula(last_row + 1, 6, f'=SUM(F7:F{last_row})+SUM(G7:G{last_row})', f_vde)
+
+                st.success(f"✅ Versão Dinâmica Gerada! Coluna E é para seus ajustes.")
+                st.download_button("📥 Baixar Relatório SOLUX", out.getvalue(), f"solux_dinamico_{tipo_robo.lower()}.xlsx")
         except Exception as e:
-            st.error(f"Erro: {e}")
+            st.error(f"Erro ao processar: {e}")
