@@ -76,7 +76,6 @@ if arquivo:
                         except: data_formatada = str(lin[0])
 
                         h_up = hist.upper()
-                        # LISTA DE BUSCA COM AS PALAVRAS QUE VOCÊ PEDIU
                         pats = [r'SERVIÇO\s?PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'SAÍDA\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = None
                         for p in pats:
@@ -85,7 +84,6 @@ if arquivo:
                         
                         nf = nf_res if nf_res else "S/ N° NF"
                         
-                        # REGRA DE SINAIS QUE VOCÊ DEFINIU:
                         if tipo_robo == "Fornecedores":
                             v_deb, v_cre = -deb, cre
                         else:
@@ -99,7 +97,6 @@ if arquivo:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
-                    # Estilos
                     f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'valign': 'vcenter', 'border': 1})
                     f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
                     f_c = wb.add_format({'align': 'center', 'border': 1})
@@ -124,50 +121,10 @@ if arquivo:
                         ws.merge_range('B2:M2', f"EMPRESA: {nome_emp} ({tipo_robo})", f_emp)
                         ws.merge_range('B4:F4', f_info[cod], f_cab)
                         ws.merge_range('I4:M4', "CONCILIAÇÃO POR NOTA", f_cab)
-                        
                         ws.ignore_errors({'number_stored_as_text': 'B6:M1000'})
 
-                        # --- TABELA RAZÃO ---
+                        # --- RAZÃO ---
                         for ci, v in enumerate(["Data","NF","Histórico","Débito","Crédito"]): ws.write(5, ci+1, v, f_cab)
                         row_f_razao = 5
                         for ri, r in enumerate(df.values):
-                            fmt_c, fmt_m, fmt_s = (f_ama_c, f_ama_m, f_ama_s) if r[5] else (f_c, f_m, f_s)
-                            ws.write(6+ri, 1, r[0], fmt_c)
-                            ws.write(6+ri, 2, r[1], fmt_c)
-                            ws.write(6+ri, 3, r[2], fmt_s)
-                            ws.write_number(6+ri, 4, r[3], fmt_m)
-                            ws.write_number(6+ri, 5, r[4], fmt_m)
-                            row_f_razao = 6+ri
-                        
-                        # NOVO: SOMA DOS TOTAIS NO FINAL DO RAZÃO
-                        ws.write(row_f_razao + 1, 3, "TOTAL RAZÃO:", f_cab)
-                        ws.write_number(row_f_razao + 1, 4, df["Deb"].sum(), f_m)
-                        ws.write_number(row_f_razao + 1, 5, df["Cred"].sum(), f_m)
-
-                        # --- TABELA CONCILIAÇÃO ---
-                        res = df.groupby("NF").agg({"Deb":"sum", "Cred":"sum"}).reset_index()
-                        res["Dif"] = res["Deb"] + res["Cred"]
-                        for ci, v in enumerate(["NF","Deb","Cred","Diferença", "Status"]): ws.write(5, ci+8, v, f_cab)
-                        row_f_res = 5
-                        for ri, r in enumerate(res.values):
-                            ws.write(6+ri, 8, str(r[0]), f_c)
-                            ws.write_number(6+ri, 9, r[1], f_m)
-                            ws.write_number(6+ri, 10, r[2], f_m)
-                            ws.write_number(6+ri, 11, r[3], f_m)
-                            if abs(r[3]) < 0.01: ws.write(6+ri, 12, "OK", f_ok)
-                            else: ws.write(6+ri, 12, "EM ABERTO", f_aberto)
-                            row_f_res = 6+ri
-                        
-                        # Saldos Finais resumidos
-                        ws.write(row_f_razao + 3, 4, "Saldo Líquido:", f_cab)
-                        t_r = df["Deb"].sum() + df["Cred"].sum()
-                        ws.write_number(row_f_razao + 3, 5, t_r, f_vde if abs(t_r) < 0.01 else f_vrm)
-                        
-                        ws.write(row_f_res + 2, 11, "Saldo Final:", f_cab)
-                        t_c = res["Dif"].sum()
-                        ws.write_number(row_f_res + 2, 12, t_c, f_vde if abs(t_c) < 0.01 else f_vrm)
-
-                st.success(f"✅ Concilição de {tipo_robo} processada com sucesso!")
-                st.download_button("📥 Baixar Relatório SOLUX", out.getvalue(), f"conciliacao_{tipo_robo.lower()}.xlsx")
-        except Exception as e:
-            st.error(f"Erro ao processar: {e}")
+                            fmt_c, fmt_m, fmt_s = (f_ama_c, f_ama_m, f_ama_s) if r[5] else (f_c, f_m, f_
