@@ -6,7 +6,7 @@ from io import BytesIO
 # 1. Configuração da Página
 st.set_page_config(page_title="SOLUX", page_icon="💡", layout="wide")
 
-# 2. ESTILO SOLUX
+# 2. ESTILO SOLUX (O Streamlit continua com o tema da marca, mas o Excel volta ao original)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
@@ -31,7 +31,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('Limpando os cantinhos verdes... 🕵️‍♂️✨'):
+    with st.spinner('Restaurando suas cores favoritas... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -63,6 +63,7 @@ if arquivo:
                         except: data_formatada = str(lin[0])
 
                         h_up = hist.upper()
+                        # Inclui termos SAÍDA e PRESTADO [2026-02-05]
                         pats = [r'SAÍDA\s?(\d+)', r'PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'NFE\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = None
                         for p in pats:
@@ -71,6 +72,7 @@ if arquivo:
                         
                         nf = nf_res if nf_res else "S/ N° NF"
                         
+                        # Regra de sinais [2026-01-30]
                         if tipo_robo == "Fornecedores": v_deb, v_cre = -deb, cre
                         else: v_deb, v_cre = deb, -cre
                             
@@ -82,13 +84,13 @@ if arquivo:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
-                    # Estilos Originais (Cinza)
+                    # --- CORES ORIGINAIS RESTAURADAS ---
                     f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'valign': 'vcenter', 'border': 1})
                     f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
                     f_c = wb.add_format({'align': 'center', 'border': 1})
                     f_m = wb.add_format({'num_format': '#,##0.00', 'border': 1})
                     f_s = wb.add_format({'border': 1})
-                    f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': '#FFFF99'})
+                    f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': '#FFFF99'}) # Amarelo de aviso
                     f_vde = wb.add_format({'num_format': '#,##0.00', 'font_color': 'green', 'bold': 1, 'border': 1})
                     f_vrm = wb.add_format({'num_format': '#,##0.00', 'font_color': 'red', 'bold': 1, 'border': 1})
 
@@ -96,9 +98,10 @@ if arquivo:
                         ws = wb.add_worksheet(str(cod)[:31])
                         ws.hide_gridlines(2)
                         
-                        # --- A mágica para tirar o verdinho (Ignorar erros de número como texto) ---
+                        # Tira os triângulos verdes
                         ws.ignore_errors({'number_stored_as_text': 'B1:M1000'})
                         
+                        # Coluna A bem fininha (largura que era)
                         ws.set_column('A:A', 2.14) 
                         ws.set_column('B:C', 15); ws.set_column('D:D', 45); ws.set_column('E:F', 18)
                         ws.set_column('G:H', 2.14) 
@@ -114,36 +117,4 @@ if arquivo:
                         for ri, r in enumerate(df_emp.values):
                             fmt = f_ama_c if r[5] else f_c
                             ws.write(6+ri, 1, r[0], fmt); ws.write(6+ri, 2, r[1], fmt)
-                            ws.write(6+ri, 3, r[2], f_s); ws.write_number(6+ri, 4, r[3], f_m); ws.write_number(6+ri, 5, r[4], f_m)
-                            row_f = 6+ri
-                        
-                        # Totais com pulo de linha
-                        ws.write(row_f + 2, 3, "TOTAL RAZÃO:", f_cab)
-                        ws.write_number(row_f + 2, 4, df_emp["Deb"].sum(), f_m)
-                        ws.write_number(row_f + 2, 5, df_emp["Cred"].sum(), f_m)
-                        
-                        ws.write(row_f + 3, 4, "Saldo Líquido:", f_cab)
-                        tr = df_emp["Deb"].sum() + df_emp["Cred"].sum()
-                        ws.write_number(row_f + 3, 5, tr, f_vde if abs(tr) < 0.01 else f_vrm)
-
-                        # Conciliação
-                        res = df_emp.groupby("NF").agg({"Deb":"sum", "Cred":"sum"}).reset_index()
-                        res["Dif"] = res["Deb"] + res["Cred"]
-                        for ci, v in enumerate(["NF","Deb","Cred","Diferença", "Status"]): ws.write(5, ci+8, v, f_cab)
-                        row_res = 5
-                        for ri, r in enumerate(res.values):
-                            ws.write(6+ri, 8, str(r[0]), f_c); ws.write_number(6+ri, 9, r[1], f_m)
-                            ws.write_number(6+ri, 10, r[2], f_m); ws.write_number(6+ri, 11, r[3], f_m)
-                            status_ok = abs(r[3]) < 0.01
-                            ws.write(6+ri, 12, "OK" if status_ok else "EM ABERTO", 
-                                     wb.add_format({'align':'center','bold':1,'border':1,'font_color':'green' if status_ok else '#CC7A00'}))
-                            row_res = 6+ri
-                        
-                        ws.write(row_res + 2, 11, "Saldo Final:", f_cab)
-                        tc = res["Dif"].sum()
-                        ws.write_number(row_res + 2, 12, tc, f_vde if abs(tc) < 0.01 else f_vrm)
-
-                st.success("✅ Solux, Conciliado com sucesso 😁")
-                st.download_button("📥 BAIXAR RELATÓRIO SOLUX", out.getvalue(), "solux_conciliacao.xlsx")
-        except Exception as e:
-            st.error(f"Erro: {e}")
+                            ws.write(6+ri, 3, r[2], f_s
