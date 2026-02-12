@@ -3,130 +3,93 @@ import pandas as pd
 import re
 from io import BytesIO
 
-# 1. Configuração da Página
-st.set_page_config(page_title="SOLUX 2026", page_icon="💡", layout="wide")
+st.set_page_config(page_title="SOLUX 2026", layout="wide")
 
-# Estilo SOLUX Lilás
+# Estilo SOLUX
 st.markdown("""
     <style>
-    .titulo { font-family: 'sans-serif'; color: #4B0082; font-size: 26px; font-weight: bold; text-align: center; padding: 15px; background-color: #E6E0FF; border-radius: 10px; margin-bottom: 20px; }
-    .stDownloadButton button { background-color: #9B8ADE !important; color: white !important; width: 100%; height: 60px; font-weight: bold; font-size: 20px; }
+    .titulo { color: #4B0082; font-size: 24px; font-weight: bold; text-align: center; padding: 10px; background-color: #E6E0FF; border-radius: 10px; }
+    .stDownloadButton button { background-color: #9B8ADE !important; color: white !important; font-weight: bold; width: 100%; height: 50px; }
     </style>
-    <div class="titulo">💡 SOLUX 2026: Layout Especial Lado a Lado 💡</div>
+    <div class="titulo">💡 SOLUX 2026: PROCESSAMENTO FORÇADO 💡</div>
     """, unsafe_allow_html=True)
 
-def to_num(val):
+def limpar_valor(v):
     try:
-        if pd.isna(val) or str(val).strip() == '': return 0.0
-        s = str(val).replace('.', '').replace(',', '.')
+        if pd.isna(v) or str(v).strip() == '': return 0.0
+        s = str(v).replace('.', '').replace(',', '.')
         return float(re.sub(r'[^-0-9.]', '', s))
     except: return 0.0
 
-with st.sidebar:
-    st.header("⚙️ Configurações")
-    tipo_robo = st.radio("Projeto de:", ["Cliente", "Fornecedor"])
-    arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
+tipo = st.sidebar.radio("Projeto:", ["Cliente", "Fornecedor"])
+arquivo = st.sidebar.file_uploader("Suba o arquivo", type=["xlsx", "xls", "csv"])
 
 if arquivo:
     try:
-        # Lendo os dados
+        # 1. LER O ARQUIVO (Ignorando erros de colunas vazias)
         if arquivo.name.endswith('.csv'):
-            df_bruto = pd.read_csv(arquivo, header=None, engine='python', encoding='latin-1')
+            df = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
         else:
-            df_bruto = pd.read_excel(arquivo, header=None)
+            df = pd.read_excel(arquivo, header=None)
 
-        # Identificando o nome da empresa e da conta
-        nome_empresa = "EMPRESA NÃO IDENTIFICADA"
-        nome_conta = "CONTA NÃO IDENTIFICADA"
-        
-        for i in range(min(20, len(df_bruto))):
-            celula = str(df_bruto.iloc[i, 0])
-            if "EMPRESA:" in celula.upper():
-                nome_empresa = str(df_bruto.iloc[i, 0])
-            if "CONTA:" in celula.upper() or "150 -" in celula:
-                nome_conta = str(df_bruto.iloc[i, 0])
+        # 2. PROCURAR OS DADOS (Onde quer que estejam)
+        dados_finais = []
+        for i in range(len(df)):
+            linha = df.iloc[i].tolist()
+            # Procuramos por uma data em qualquer uma das primeiras 3 colunas
+            data_encontrada = False
+            for col_idx in range(min(4, len(linha))):
+                val_celula = str(linha[col_idx])
+                if '/' in val_celula and len(val_celula) >= 8:
+                    # Achamos a linha de lançamento!
+                    # Normalmente: Data(col 1), Hist(col 3), NF(col 4), Deb(col 5), Cred(col 6) no seu exemplo
+                    # Mas vamos usar posições relativas ao que vimos no seu CSV
+                    try:
+                        data = val_celula
+                        hist = str(linha[col_idx+2])
+                        nf_original = str(linha[col_idx+1])
+                        deb = limpar_valor(linha[col_idx+4])
+                        cre = limpar_valor(linha[col_idx+5])
+                        
+                        if deb != 0 or cre != 0:
+                            # Regra de Sinais do seu contexto
+                            v_deb, v_cre = (-deb, cre) if tipo == "Fornecedor" else (deb, -cre)
+                            
+                            # Limpar a NF do Histórico (SAÍDA, PRESTADO, NF)
+                            pats = [r'SAÍDA\s?(\d+)', r'PRESTADO\s?(\d+)', r'NF\s?(\d+)', r'NFE\s?(\d+)', r'CTE\s?(\d+)']
+                            nf_ajustada = nf_original
+                            for p in pats:
+                                m = re.findall(p, hist.upper())
+                                if m: nf_ajustada = m[0]; break
+                            
+                            dados_finais.append([data, nf_ajustada, hist, v_deb, v_cre])
+                            data_encontrada = True
+                            break
+                    except: continue
+            if data_encontrada: continue
 
-        dados_lista = []
-        for i in range(len(df_bruto)):
-            lin = df_bruto.iloc[i]
-            if len(lin) >= 10 and pd.notna(lin[0]) and '/' in str(lin[0]):
-                deb, cre = to_num(lin[8]), to_num(lin[9])
-                if deb != 0 or cre != 0:
-                    hist = str(lin[2]).strip()
-                    h_up = hist.upper()
-                    
-                    pats = [r'SAÍDA\s?(\d+)', r'PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'NF\s?(\d+)', r'NFE\s?(\d+)']
-                    nf_res = "S/N"
-                    for p in pats:
-                        m = re.findall(p, h_up)
-                        if m: nf_res = m[0]; break
-                    
-                    v_deb, v_cre = (-deb, cre) if tipo_robo == "Fornecedor" else (deb, -cre)
-                    dados_lista.append({"Data": lin[0], "NF": nf_res, "Histórico": hist, "Débito": v_deb, "Crédito": v_cre})
-
-        if dados_lista:
-            df_final = pd.DataFrame(dados_lista)
+        if dados_finais:
+            df_razao = pd.DataFrame(dados_finais, columns=["Data", "NF_AJUSTADA", "Histórico", "Débito", "Crédito"])
             
-            # Criando o Resumo para o lado direito
-            df_resumo = df_final.groupby("NF").agg({"Débito":"sum", "Crédito":"sum"}).reset_index()
-            df_resumo["DIFERENÇA"] = df_resumo["Débito"] + df_resumo["Crédito"]
-            df_resumo["STATUS"] = df_resumo["DIFERENÇA"].apply(lambda x: "OK" if abs(x) < 0.01 else "EM ABERTO")
+            # 3. CRIAR A CONCILIAÇÃO LADO A LADO
+            resumo = df_razao.groupby("NF_AJUSTADA").agg({"Débito":"sum", "Crédito":"sum"}).reset_index()
+            resumo["DIFERENÇA"] = resumo["Débito"] + resumo["Crédito"]
+            resumo["STATUS"] = resumo["DIFERENÇA"].apply(lambda x: "OK" if abs(x) < 0.01 else "ABERTO")
 
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                workbook = writer.book
-                ws = workbook.add_worksheet('Conciliação')
+                # Escreve tudo na mesma aba (Lado a Lado)
+                df_razao.to_excel(writer, sheet_name='CONCILIACAO', index=False, startrow=5)
+                resumo.to_excel(writer, sheet_name='CONCILIACAO', index=False, startrow=5, startcol=7)
                 
-                # Formatos
-                f_titulo = workbook.add_format({'bold': True, 'font_size': 12, 'bg_color': '#D9EAD3', 'border': 1})
-                f_cab = workbook.add_format({'bold': True, 'bg_color': '#EFEFEF', 'border': 1, 'align': 'center'})
-                f_num = workbook.add_format({'num_format': '#,##0.00', 'border': 1})
-                f_txt = workbook.add_format({'border': 1})
-                f_cnt = workbook.add_format({'border': 1, 'align': 'center'})
+                ws = writer.sheets['CONCILIACAO']
+                ws.write('A1', f'EMPRESA: PROJETO {tipo.upper()}', workbook.add_format({'bold':True}))
+                ws.write('H5', 'CONCILIAÇÃO POR NOTA', workbook.add_format({'bg_color': '#D9EAD3', 'bold': True}))
 
-                # Escrevendo o Cabeçalho (Linha 1 e 2)
-                ws.merge_range('A1:L1', nome_empresa, f_titulo)
-                ws.merge_range('A2:E2', nome_conta, f_titulo)
-                ws.merge_range('H2:L2', "CONCILIAÇÃO POR NOTA", f_titulo)
-
-                # Cabeçalhos das colunas (Linha 4)
-                colunas_razao = ["Data", "NF", "Histórico", "Débito", "Crédito"]
-                for i, col in enumerate(colunas_razao):
-                    ws.write(3, i, col, f_cab)
-                
-                colunas_resumo = ["NF", "Crédito", "Débito", "DIFERENÇA", "STATUS"]
-                for i, col in enumerate(colunas_resumo):
-                    ws.write(3, i + 7, col, f_cab)
-
-                # Escrevendo Dados do Razão (Lado Esquerdo)
-                for r_idx, row in df_final.iterrows():
-                    ws.write(4 + r_idx, 0, str(row['Data']), f_cnt)
-                    ws.write(4 + r_idx, 1, row['NF'], f_cnt)
-                    ws.write(4 + r_idx, 2, row['Histórico'], f_txt)
-                    ws.write(4 + r_idx, 3, row['Débito'], f_num)
-                    ws.write(4 + r_idx, 4, row['Crédito'], f_num)
-
-                # Escrevendo Dados da Dinâmica (Lado Direito)
-                for r_idx, row in df_resumo.iterrows():
-                    ws.write(4 + r_idx, 7, row['NF'], f_cnt)
-                    ws.write(4 + r_idx, 8, row['Crédito'], f_num)
-                    ws.write(4 + r_idx, 9, row['Débito'], f_num)
-                    ws.write(4 + r_idx, 10, row['DIFERENÇA'], f_num)
-                    ws.write(4 + r_idx, 11, row['STATUS'], f_cnt)
-
-                # Ajuste de largura das colunas
-                ws.set_column('A:B', 12); ws.set_column('C:C', 40); ws.set_column('D:E', 15)
-                ws.set_column('G:G', 5); ws.set_column('H:L', 15)
-
-            st.success("✅ Arquivo gerado exatamente no modelo solicitado!")
-            st.download_button(
-                label="📥 BAIXAR EXCEL SOLUX (MODELO LADO A LADO)",
-                data=output.getvalue(),
-                file_name=f"conciliacao_solux_oficial.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            st.success("✅ CONSEGUI! Ficheiro processado.")
+            st.download_button("📥 BAIXAR AGORA", output.getvalue(), "solux_processado.xlsx")
         else:
-            st.warning("Não encontrei dados para processar.")
+            st.warning("Não encontrei as datas de lançamento. Verifique se o arquivo está no formato correto.")
 
     except Exception as e:
-        st.error(f"Erro: {e}")
+        st.error(f"Erro no Processamento: {e}")
