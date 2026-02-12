@@ -176,7 +176,7 @@ if arquivo:
                         ws.write(row_res + 2, 11, "Saldo Final:", f_label_saldo)
                         ws.write_number(row_res + 2, 12, sf, f_saldo_verde if sf >= 0 else f_saldo_vermelho)
 
-                st.success("✅ Interface padronizada com sucesso!")
-                st.download_button("📥 BAIXAR RELATÓRIO SOLUX", out.getvalue(), "solux_conciliacao.xlsx")
+                st.success("Solux! Conciliado com sucesso 😁")
+                st.download_button("📥 BAIXAR CONICLIAÇÃO SOLUX", out.getvalue(), "solux_conciliacao.xlsx")
         except Exception as e:
             st.error(f"Erro: {e}")
