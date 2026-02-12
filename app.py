@@ -31,7 +31,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('Sincronizando as cores das caixinhas... 🕵️‍♂️✨'):
+    with st.spinner('SOLUX, conciliando... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -62,7 +62,6 @@ if arquivo:
                         except: data_formatada = str(lin[0])
 
                         h_up = hist.upper()
-                        # TERMOS DE BUSCA DO ROBÔ [2026-02-05]
                         pats = [
                             r'SERVIÇO\s?TOMADO\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', 
                             r'NF\s?DE\s?S\s?(\d+)', r'CTE\s?(\d+)', r'SAÍDA\s?(\d+)', 
@@ -74,7 +73,6 @@ if arquivo:
                             if m: nf_res = m[0]; break
                         
                         nf = nf_res if nf_res else "S/ N° NF"
-                        # REGRA DE CRÉDITO E DÉBITO [2026-01-30]
                         v_deb, v_cre = (-deb, cre) if tipo_robo == "Fornecedores" else (deb, -cre)
                         dados.append({"Data": data_formatada, "NF": nf, "Hist": hist, "Deb": v_deb, "Cred": v_cre, "Aviso": (nf == "S/ N° NF")})
 
@@ -84,33 +82,28 @@ if arquivo:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
-                    # --- ESTILOS DE CORES ---
+                    # Estilos Base
                     f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'border': 1})
-                    f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1}) # Cor do Título
+                    f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
                     f_c = wb.add_format({'align': 'center', 'border': 1})
                     f_m = wb.add_format({'num_format': '#,##0.00', 'border': 1})
                     f_s = wb.add_format({'border': 1})
+                    f_ama_lin = wb.add_format({'border': 1, 'bg_color': '#FFFF99'}) # Estilo para linha amarela
                     
-                    # Estilos Amarelos para linha sem NF
-                    f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': '#FFFF99'})
-                    f_ama_m = wb.add_format({'num_format': '#,##0.00', 'border': 1, 'bg_color': '#FFFF99'})
-                    f_ama_s = wb.add_format({'border': 1, 'bg_color': '#FFFF99'})
-                    
-                    # --- CAIXINHA DO SALDO COM MESMA COR DO TÍTULO E FONTE AZUL MARINHO ---
-                    f_saldo_final = wb.add_format({
-                        'num_format': '#,##0.00', 
-                        'font_color': '#000099', 
-                        'bg_color': '#D3D3D3', # MESMA COR DA CAIXINHA DO TITULO
-                        'bold': 1, 
-                        'border': 1,
-                        'align': 'center'
+                    # --- NOVOS ESTILOS PARA SALDOS (DENTRO DA CAIXINHA CINZA) ---
+                    # Saldo Positivo = Verde
+                    f_saldo_verde = wb.add_format({
+                        'num_format': '#,##0.00', 'font_color': 'green', 'bg_color': '#D3D3D3', 
+                        'bold': 1, 'border': 1, 'align': 'center'
+                    })
+                    # Saldo Negativo = Vermelho
+                    f_saldo_vermelho = wb.add_format({
+                        'num_format': '#,##0.00', 'font_color': 'red', 'bg_color': '#D3D3D3', 
+                        'bold': 1, 'border': 1, 'align': 'center'
                     })
                     
                     f_label_saldo = wb.add_format({
-                        'bold': 1, 
-                        'bg_color': '#D3D3D3', # MESMA COR DA CAIXINHA DO TITULO
-                        'align': 'center', 
-                        'border': 1
+                        'bold': 1, 'bg_color': '#D3D3D3', 'align': 'center', 'border': 1
                     })
 
                     for cod, df_emp in banco.items():
@@ -118,11 +111,10 @@ if arquivo:
                         ws.hide_gridlines(2)
                         ws.ignore_errors({'number_stored_as_text': 'B1:M2000'})
                         
-                        ws.set_column('A:A', 2.14) # Largura original
+                        ws.set_column('A:A', 2.14) 
                         ws.set_column('B:C', 15); ws.set_column('D:D', 45); ws.set_column('E:F', 18)
                         ws.set_column('G:H', 2.14); ws.set_column('I:M', 18)
                         
-                        # Título da Empresa (Caixinha Original)
                         ws.merge_range('B2:M2', f"EMPRESA: {nome_emp} ({tipo_robo})", f_emp)
                         ws.merge_range('B4:F4', f_info[cod], f_cab)
                         ws.merge_range('I4:M4', "CONCILIAÇÃO POR NOTA", f_cab)
@@ -132,21 +124,23 @@ if arquivo:
                         
                         row_f = 5
                         for ri, r in enumerate(df_emp.values):
-                            fmt_c, fmt_m, fmt_s = (f_ama_c, f_ama_m, f_ama_s) if r[5] else (f_c, f_m, f_s)
-                            ws.write(6+ri, 1, r[0], fmt_c)
-                            ws.write(6+ri, 2, r[1], fmt_c)
-                            ws.write(6+ri, 3, r[2], fmt_s)
-                            ws.write_number(6+ri, 4, r[3], fmt_m)
-                            ws.write_number(6+ri, 5, r[4], fmt_m)
+                            # Pintura da linha inteira se for Aviso
+                            fmt = f_ama_lin if r[5] else None
+                            ws.write(6+ri, 1, r[0], fmt if fmt else f_c)
+                            ws.write(6+ri, 2, r[1], fmt if fmt else f_c)
+                            ws.write(6+ri, 3, r[2], fmt if fmt else f_s)
+                            ws.write_number(6+ri, 4, r[3], wb.add_format({'num_format': '#,##0.00', 'border': 1, 'bg_color': '#FFFF99' if r[5] else 'white'}))
+                            ws.write_number(6+ri, 5, r[4], wb.add_format({'num_format': '#,##0.00', 'border': 1, 'bg_color': '#FFFF99' if r[5] else 'white'}))
                             row_f = 6+ri
                         
-                        # Totais Razão com as novas cores de caixinha
+                        # Cálculo Saldo Líquido
+                        sl = df_emp["Deb"].sum() + df_emp["Cred"].sum()
                         ws.write(row_f + 2, 3, "TOTAL RAZÃO:", f_cab)
                         ws.write_number(row_f + 2, 4, df_emp["Deb"].sum(), f_m)
                         ws.write_number(row_f + 2, 5, df_emp["Cred"].sum(), f_m)
                         
                         ws.write(row_f + 3, 4, "Saldo Líquido:", f_label_saldo)
-                        ws.write_number(row_f + 3, 5, df_emp["Deb"].sum() + df_emp["Cred"].sum(), f_saldo_final)
+                        ws.write_number(row_f + 3, 5, sl, f_saldo_verde if sl >= 0 else f_saldo_vermelho)
 
                         # Conciliação
                         res = df_emp.groupby("NF").agg({"Deb":"sum", "Cred":"sum"}).reset_index()
@@ -160,14 +154,15 @@ if arquivo:
                             ws.write_number(6+ri, 9, r[1], f_m)
                             ws.write_number(6+ri, 10, r[2], f_m)
                             ws.write_number(6+ri, 11, r[3], f_m)
-                            st_ok = abs(r[3]) < 0.01
-                            ws.write(6+ri, 12, "OK" if st_ok else "EM ABERTO", 
-                                     wb.add_format({'align':'center','bold':1,'border':1,'font_color':'green' if st_ok else '#CC7A00'}))
+                            ok = abs(r[3]) < 0.01
+                            ws.write(6+ri, 12, "OK" if ok else "EM ABERTO", 
+                                     wb.add_format({'align':'center','bold':1,'border':1,'font_color':'green' if ok else '#CC7A00'}))
                             row_res = 6+ri
                         
-                        # Saldo Final com as novas cores de caixinha
+                        # Cálculo Saldo Final Conciliação
+                        sf = res["Dif"].sum()
                         ws.write(row_res + 2, 11, "Saldo Final:", f_label_saldo)
-                        ws.write_number(row_res + 2, 12, res["Dif"].sum(), f_saldo_final)
+                        ws.write_number(row_res + 2, 12, sf, f_saldo_verde if sf >= 0 else f_saldo_vermelho)
 
                 st.success("✅ Solux! Conciliado com sucesso 😁")
                 st.download_button("📥 BAIXAR RELATÓRIO SOLUX", out.getvalue(), "solux_conciliacao.xlsx")
