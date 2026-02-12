@@ -6,7 +6,7 @@ from io import BytesIO
 # 1. Configuração da Página
 st.set_page_config(page_title="SOLUX", page_icon="💡", layout="wide")
 
-# 2. ESTILO SOLUX (O Streamlit continua com o tema da marca, mas o Excel volta ao original)
+# 2. ESTILO DA INTERFACE (Streamlit)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
@@ -31,7 +31,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('Restaurando suas cores favoritas... 🕵️‍♂️✨'):
+    with st.spinner('Restaurando layout original... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -58,12 +58,10 @@ if arquivo:
                     if deb != 0 or cre != 0:
                         hist = str(lin[2]).strip()
                         if 'TOTAL' in hist.upper(): continue
-                        
                         try: data_formatada = pd.to_datetime(lin[0]).strftime('%d/%m/%Y')
                         except: data_formatada = str(lin[0])
 
                         h_up = hist.upper()
-                        # Inclui termos SAÍDA e PRESTADO [2026-02-05]
                         pats = [r'SAÍDA\s?(\d+)', r'PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'NFE\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = None
                         for p in pats:
@@ -71,11 +69,7 @@ if arquivo:
                             if m: nf_res = m[0]; break
                         
                         nf = nf_res if nf_res else "S/ N° NF"
-                        
-                        # Regra de sinais [2026-01-30]
-                        if tipo_robo == "Fornecedores": v_deb, v_cre = -deb, cre
-                        else: v_deb, v_cre = deb, -cre
-                            
+                        v_deb, v_cre = (-deb, cre) if tipo_robo == "Fornecedores" else (deb, -cre)
                         dados.append({"Data": data_formatada, "NF": nf, "Hist": hist, "Deb": v_deb, "Cred": v_cre, "Aviso": (nf == "S/ N° NF")})
 
             if f_cod and dados: banco[f_cod] = pd.DataFrame(dados)
@@ -84,13 +78,13 @@ if arquivo:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
-                    # --- CORES ORIGINAIS RESTAURADAS ---
-                    f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'valign': 'vcenter', 'border': 1})
+                    # --- ESTILOS ORIGINAIS (CINZAS) ---
+                    f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'border': 1})
                     f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
                     f_c = wb.add_format({'align': 'center', 'border': 1})
                     f_m = wb.add_format({'num_format': '#,##0.00', 'border': 1})
                     f_s = wb.add_format({'border': 1})
-                    f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': '#FFFF99'}) # Amarelo de aviso
+                    f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': '#FFFF99'})
                     f_vde = wb.add_format({'num_format': '#,##0.00', 'font_color': 'green', 'bold': 1, 'border': 1})
                     f_vrm = wb.add_format({'num_format': '#,##0.00', 'font_color': 'red', 'bold': 1, 'border': 1})
 
@@ -98,10 +92,10 @@ if arquivo:
                         ws = wb.add_worksheet(str(cod)[:31])
                         ws.hide_gridlines(2)
                         
-                        # Tira os triângulos verdes
-                        ws.ignore_errors({'number_stored_as_text': 'B1:M1000'})
+                        # Remove os triângulos verdes de erro
+                        ws.ignore_errors({'number_stored_as_text': 'B1:M2000'})
                         
-                        # Coluna A bem fininha (largura que era)
+                        # Coluna A com a largura que era (fininha)
                         ws.set_column('A:A', 2.14) 
                         ws.set_column('B:C', 15); ws.set_column('D:D', 45); ws.set_column('E:F', 18)
                         ws.set_column('G:H', 2.14) 
@@ -111,10 +105,16 @@ if arquivo:
                         ws.merge_range('B4:F4', f_info[cod], f_cab)
                         ws.merge_range('I4:M4', "CONCILIAÇÃO POR NOTA", f_cab)
 
-                        # Razão
-                        for ci, v in enumerate(["Data","NF","Histórico","Débito","Crédito"]): ws.write(5, ci+1, v, f_cab)
+                        # Tabela da Esquerda (Razão)
+                        for ci, v in enumerate(["Data","NF","Histórico","Débito","Crédito"]):
+                            ws.write(5, ci+1, v, f_cab)
                         row_f = 5
                         for ri, r in enumerate(df_emp.values):
                             fmt = f_ama_c if r[5] else f_c
                             ws.write(6+ri, 1, r[0], fmt); ws.write(6+ri, 2, r[1], fmt)
-                            ws.write(6+ri, 3, r[2], f_s
+                            ws.write(6+ri, 3, r[2], f_s); ws.write_number(6+ri, 4, r[3], f_m); ws.write_number(6+ri, 5, r[4], f_m)
+                            row_f = 6+ri
+                        
+                        # Espaço (pula linha) e Totais
+                        ws.write(row_f + 2, 3, "TOTAL RAZÃO:", f_cab)
+                        ws.write_number(row_f + 2, 4, df_emp["Deb"].sum
