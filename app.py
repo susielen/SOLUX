@@ -31,7 +31,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('SOLUX está procurando Serviço, CTE e pintando as linhas... 🕵️‍♂️✨'):
+    with st.spinner('SOLUX lendo Serviço Tomado, Frete Tomado e CTE... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -63,11 +63,16 @@ if arquivo:
                         except: data_formatada = str(lin[0])
 
                         h_up = hist.upper()
-                        # --- BUSCA MELHORADA (Serviço, CTE, Saída, Prestado, etc) ---
+                        # --- BUSCA REFINADA COM SEUS TERMOS ---
                         pats = [
-                            r'SAÍDA\s?(\d+)', r'PRESTADO\s?(\d+)', r'SERVIÇO\s?(\d+)', 
-                            r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', 
-                            r'NF\s?(\d+)', r'NOTA\s?(\d+)'
+                            r'SERVIÇO\s?TOMADO\s?(\d+)', 
+                            r'FRETE\s?TOMADO\s?(\d+)', 
+                            r'NF\s?DE\s?S\s?(\d+)', 
+                            r'CTE\s?(\d+)',
+                            r'SAÍDA\s?(\d+)', 
+                            r'PRESTADO\s?(\d+)', 
+                            r'NFE\s?(\d+)', 
+                            r'NF\s?(\d+)'
                         ]
                         nf_res = None
                         for p in pats:
@@ -85,18 +90,15 @@ if arquivo:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
-                    # Estilos
+                    # Estilos Cinzas Originais
                     f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'border': 1})
                     f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
                     f_c = wb.add_format({'align': 'center', 'border': 1})
                     f_m = wb.add_format({'num_format': '#,##0.00', 'border': 1})
                     f_s = wb.add_format({'border': 1})
-                    
-                    # --- ESTILO PARA A LINHA INTEIRA AMARELA ---
                     f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': '#FFFF99'})
                     f_ama_m = wb.add_format({'num_format': '#,##0.00', 'border': 1, 'bg_color': '#FFFF99'})
                     f_ama_s = wb.add_format({'border': 1, 'bg_color': '#FFFF99'})
-                    
                     f_vde = wb.add_format({'num_format': '#,##0.00', 'font_color': 'green', 'bold': 1, 'border': 1})
                     f_vrm = wb.add_format({'num_format': '#,##0.00', 'font_color': 'red', 'bold': 1, 'border': 1})
 
@@ -118,9 +120,8 @@ if arquivo:
                         
                         row_f = 5
                         for ri, r in enumerate(df_emp.values):
-                            # Se for aviso (S/ N° NF), usa o estilo amarelo em TODAS as colunas da linha
+                            # PINTA A LINHA INTEIRA SE NÃO TIVER NF
                             fmt_c, fmt_m, fmt_s = (f_ama_c, f_ama_m, f_ama_s) if r[5] else (f_c, f_m, f_s)
-                            
                             ws.write(6+ri, 1, r[0], fmt_c)
                             ws.write(6+ri, 2, r[1], fmt_c)
                             ws.write(6+ri, 3, r[2], fmt_s)
@@ -157,7 +158,7 @@ if arquivo:
                         tc = res["Dif"].sum()
                         ws.write_number(row_res + 2, 12, tc, f_vde if abs(tc) < 0.01 else f_vrm)
 
-                st.success("✅ Agora sim! Busca ampliada e linhas pintadas!")
+                st.success("✅ Busca de Termos Atualizada e Linhas Pintadas!")
                 st.download_button("📥 BAIXAR RELATÓRIO SOLUX", out.getvalue(), "solux_conciliacao.xlsx")
         except Exception as e:
             st.error(f"Erro: {e}")
