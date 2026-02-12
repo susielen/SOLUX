@@ -168,7 +168,7 @@ if arquivo:
                         t_c = res["Dif"].sum()
                         ws.write_number(row_f_res + 2, 12, t_c, f_vde if abs(t_c) < 0.01 else f_vrm)
 
-                st.success(f"✅ Versão Final para {tipo_robo} processada com sucesso!")
+                st.success(f"✅ Concilição de {tipo_robo} processada com sucesso!")
                 st.download_button("📥 Baixar Relatório SOLUX", out.getvalue(), f"conciliacao_{tipo_robo.lower()}.xlsx")
         except Exception as e:
             st.error(f"Erro ao processar: {e}")
