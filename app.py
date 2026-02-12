@@ -37,7 +37,7 @@ st.markdown("""
 
     /* MUDANÇA AQUI: Cor do fundo do Drag and Drop (File Uploader) */
     [data-testid="stFileUploadDropzone"] {
-        background-color: #9B8ADE !important;
+        background-color: F3F0FF !important;
         border: 2px dashed #4B0082 !important;
         color: white !important;
     }
