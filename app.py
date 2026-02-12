@@ -11,7 +11,7 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
     
-    .stApp { background-color: #F3F0FF; }
+    .stApp { background-color: #4B0082; }
     header[data-testid="stHeader"], [data-testid="stSidebar"] { background-color: #9B8ADE !important; }
     
     .titulo { 
@@ -173,6 +173,6 @@ if arquivo:
                         ws.write_number(row_res + 2, 12, sf, f_saldo_verde if sf >= 0 else f_saldo_vermelho)
 
                 st.success("Solux! Conciliado com sucesso 😁")
-                st.download_button("📥 BAIXAR CONICLIAÇÃO SOLUX", out.getvalue(), "solux_conciliacao.xlsx")
+                st.download_button("📥 BAIXAR CONCILIAÇÃO SOLUX", out.getvalue(), "solux_conciliacao.xlsx")
         except Exception as e:
             st.error(f"Erro no Processamento: {e}")
