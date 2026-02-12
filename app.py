@@ -31,7 +31,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('SOLUX lendo Serviço Tomado, Frete Tomado e CTE... 🕵️‍♂️✨'):
+    with st.spinner('SOLUX aplicando o azul marinho nos saldos... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -63,16 +63,11 @@ if arquivo:
                         except: data_formatada = str(lin[0])
 
                         h_up = hist.upper()
-                        # --- BUSCA REFINADA COM SEUS TERMOS ---
+                        # TERMOS DE BUSCA SOLICITADOS
                         pats = [
-                            r'SERVIÇO\s?TOMADO\s?(\d+)', 
-                            r'FRETE\s?TOMADO\s?(\d+)', 
-                            r'NF\s?DE\s?S\s?(\d+)', 
-                            r'CTE\s?(\d+)',
-                            r'SAÍDA\s?(\d+)', 
-                            r'PRESTADO\s?(\d+)', 
-                            r'NFE\s?(\d+)', 
-                            r'NF\s?(\d+)'
+                            r'SERVIÇO\s?TOMADO\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', 
+                            r'NF\s?DE\s?S\s?(\d+)', r'CTE\s?(\d+)', r'SAÍDA\s?(\d+)', 
+                            r'PRESTADO\s?(\d+)', r'NFE\s?(\d+)', r'NF\s?(\d+)'
                         ]
                         nf_res = None
                         for p in pats:
@@ -80,7 +75,6 @@ if arquivo:
                             if m: nf_res = m[0]; break
                         
                         nf = nf_res if nf_res else "S/ N° NF"
-                        
                         v_deb, v_cre = (-deb, cre) if tipo_robo == "Fornecedores" else (deb, -cre)
                         dados.append({"Data": data_formatada, "NF": nf, "Hist": hist, "Deb": v_deb, "Cred": v_cre, "Aviso": (nf == "S/ N° NF")})
 
@@ -90,17 +84,25 @@ if arquivo:
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
                     wb = writer.book
-                    # Estilos Cinzas Originais
+                    # Estilos
                     f_cab = wb.add_format({'bold': 1, 'bg_color': '#F2F2F2', 'align': 'center', 'border': 1})
                     f_emp = wb.add_format({'bold': 1, 'font_size': 14, 'align': 'center', 'bg_color': '#D3D3D3', 'border': 1})
                     f_c = wb.add_format({'align': 'center', 'border': 1})
                     f_m = wb.add_format({'num_format': '#,##0.00', 'border': 1})
                     f_s = wb.add_format({'border': 1})
+                    
+                    # Estilos Amarelos (Linha Inteira)
                     f_ama_c = wb.add_format({'align': 'center', 'border': 1, 'bg_color': '#FFFF99'})
                     f_ama_m = wb.add_format({'num_format': '#,##0.00', 'border': 1, 'bg_color': '#FFFF99'})
                     f_ama_s = wb.add_format({'border': 1, 'bg_color': '#FFFF99'})
-                    f_vde = wb.add_format({'num_format': '#,##0.00', 'font_color': 'green', 'bold': 1, 'border': 1})
-                    f_vrm = wb.add_format({'num_format': '#,##0.00', 'font_color': 'red', 'bold': 1, 'border': 1})
+                    
+                    # --- NOVO ESTILO: AZUL MARINHO 000099 ---
+                    f_azul_marinho = wb.add_format({
+                        'num_format': '#,##0.00', 
+                        'font_color': '#000099', 
+                        'bold': 1, 
+                        'border': 1
+                    })
 
                     for cod, df_emp in banco.items():
                         ws = wb.add_worksheet(str(cod)[:31])
@@ -120,7 +122,6 @@ if arquivo:
                         
                         row_f = 5
                         for ri, r in enumerate(df_emp.values):
-                            # PINTA A LINHA INTEIRA SE NÃO TIVER NF
                             fmt_c, fmt_m, fmt_s = (f_ama_c, f_ama_m, f_ama_s) if r[5] else (f_c, f_m, f_s)
                             ws.write(6+ri, 1, r[0], fmt_c)
                             ws.write(6+ri, 2, r[1], fmt_c)
@@ -129,13 +130,12 @@ if arquivo:
                             ws.write_number(6+ri, 5, r[4], fmt_m)
                             row_f = 6+ri
                         
-                        # Totais com pulo de linha
+                        # --- TOTAIS DO RAZÃO COM O AZUL MARINHO ---
                         ws.write(row_f + 2, 3, "TOTAL RAZÃO:", f_cab)
                         ws.write_number(row_f + 2, 4, df_emp["Deb"].sum(), f_m)
                         ws.write_number(row_f + 2, 5, df_emp["Cred"].sum(), f_m)
                         ws.write(row_f + 3, 4, "Saldo Líquido:", f_cab)
-                        tr = df_emp["Deb"].sum() + df_emp["Cred"].sum()
-                        ws.write_number(row_f + 3, 5, tr, f_vde if abs(tr) < 0.01 else f_vrm)
+                        ws.write_number(row_f + 3, 5, df_emp["Deb"].sum() + df_emp["Cred"].sum(), f_azul_marinho)
 
                         # Conciliação
                         res = df_emp.groupby("NF").agg({"Deb":"sum", "Cred":"sum"}).reset_index()
@@ -154,11 +154,11 @@ if arquivo:
                                      wb.add_format({'align':'center','bold':1,'border':1,'font_color':'green' if st_ok else '#CC7A00'}))
                             row_res = 6+ri
                         
+                        # --- SALDO FINAL DA CONCILIAÇÃO COM O AZUL MARINHO ---
                         ws.write(row_res + 2, 11, "Saldo Final:", f_cab)
-                        tc = res["Dif"].sum()
-                        ws.write_number(row_res + 2, 12, tc, f_vde if abs(tc) < 0.01 else f_vrm)
+                        ws.write_number(row_res + 2, 12, res["Dif"].sum(), f_azul_marinho)
 
-                st.success("✅ Busca de Termos Atualizada e Linhas Pintadas!")
+                st.success("✅ Saldos configurados com Azul Marinho (000099)!")
                 st.download_button("📥 BAIXAR RELATÓRIO SOLUX", out.getvalue(), "solux_conciliacao.xlsx")
         except Exception as e:
             st.error(f"Erro: {e}")
