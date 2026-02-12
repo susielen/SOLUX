@@ -31,7 +31,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('SOLUX preparando as cores dos sinais... 🕵️‍♂️✨'):
+    with st.spinner('Conciliando... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -164,7 +164,7 @@ if arquivo:
                         ws.write(row_res + 2, 11, "Saldo Final:", f_label_saldo)
                         ws.write_number(row_res + 2, 12, sf, f_saldo_verde if sf >= 0 else f_saldo_vermelho)
 
-                st.success("✅ Tudo padronizado: Saldo Verde (+) e Vermelho (-)")
-                st.download_button("📥 BAIXAR RELATÓRIO SOLUX", out.getvalue(), "solux_conciliacao.xlsx")
+                st.success("Solux! Conciliado com sucesso 😁")
+                st.download_button("📥 BAIXAR CONCILIAÇÃO SOLUX", out.getvalue(), "solux_conciliacao.xlsx")
         except Exception as e:
             st.error(f"Erro: {e}")
