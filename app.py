@@ -40,7 +40,6 @@ def to_num(val):
 
 with st.sidebar:
     st.header("⚙️ Painel de Controle")
-    # O usuário escolhe o tipo de conciliação aqui
     tipo_robo = st.radio("Este projeto é de:", ["Clientes", "Fornecedores"])
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
@@ -73,13 +72,11 @@ if arquivo:
                         hist = str(lin[2]).strip()
                         if 'TOTAL' in hist.upper(): continue
                         
-                        try:
-                            data_formatada = pd.to_datetime(lin[0]).strftime('%d/%m/%Y')
-                        except:
-                            data_formatada = str(lin[0])
+                        try: data_formatada = pd.to_datetime(lin[0]).strftime('%d/%m/%Y')
+                        except: data_formatada = str(lin[0])
 
                         h_up = hist.upper()
-                        # LISTA DE BUSCA INCLUINDO "SAÍDA" E "PRESTADO"
+                        # LISTA DE BUSCA COM AS PALAVRAS QUE VOCÊ PEDIU
                         pats = [r'SERVIÇO\s?PRESTADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'CTE\s?(\d+)', r'NFE\s?(\d+)', r'SAÍDA\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = None
                         for p in pats:
@@ -88,10 +85,8 @@ if arquivo:
                         
                         nf = nf_res if nf_res else "S/ N° NF"
                         
-                        # REGRA DE SINAIS (User Context):
-                        # Fornecedor: Crédito (+) e Débito (-)
-                        # Cliente: Débito (+) e Crédito (-)
-                        if tipo_robo == "Fornecedor":
+                        # REGRA DE SINAIS QUE VOCÊ DEFINIU:
+                        if tipo_robo == "Fornecedores":
                             v_deb, v_cre = -deb, cre
                         else:
                             v_deb, v_cre = deb, -cre
@@ -122,7 +117,6 @@ if arquivo:
                         ws = wb.add_worksheet(str(cod)[:31])
                         ws.hide_gridlines(2)
                         
-                        # Colunas G e H com 19 pixels (2.14 largura)
                         ws.set_column('A:A', 2); ws.set_column('B:C', 15); ws.set_column('D:D', 45); ws.set_column('E:F', 18)
                         ws.set_column('G:H', 2.14) 
                         ws.set_column('I:L', 18); ws.set_column('M:M', 15)
@@ -133,7 +127,7 @@ if arquivo:
                         
                         ws.ignore_errors({'number_stored_as_text': 'B6:M1000'})
 
-                        # Tabela Razão
+                        # --- TABELA RAZÃO ---
                         for ci, v in enumerate(["Data","NF","Histórico","Débito","Crédito"]): ws.write(5, ci+1, v, f_cab)
                         row_f_razao = 5
                         for ri, r in enumerate(df.values):
@@ -144,8 +138,13 @@ if arquivo:
                             ws.write_number(6+ri, 4, r[3], fmt_m)
                             ws.write_number(6+ri, 5, r[4], fmt_m)
                             row_f_razao = 6+ri
+                        
+                        # NOVO: SOMA DOS TOTAIS NO FINAL DO RAZÃO
+                        ws.write(row_f_razao + 1, 3, "TOTAL RAZÃO:", f_cab)
+                        ws.write_number(row_f_razao + 1, 4, df["Deb"].sum(), f_m)
+                        ws.write_number(row_f_razao + 1, 5, df["Cred"].sum(), f_m)
 
-                        # Tabela Conciliação
+                        # --- TABELA CONCILIAÇÃO ---
                         res = df.groupby("NF").agg({"Deb":"sum", "Cred":"sum"}).reset_index()
                         res["Dif"] = res["Deb"] + res["Cred"]
                         for ci, v in enumerate(["NF","Deb","Cred","Diferença", "Status"]): ws.write(5, ci+8, v, f_cab)
@@ -159,10 +158,10 @@ if arquivo:
                             else: ws.write(6+ri, 12, "EM ABERTO", f_aberto)
                             row_f_res = 6+ri
                         
-                        # Saldos Finais individuais com pular linha
-                        ws.write(row_f_razao + 2, 4, "Saldo Razão:", f_cab)
+                        # Saldos Finais resumidos
+                        ws.write(row_f_razao + 3, 4, "Saldo Líquido:", f_cab)
                         t_r = df["Deb"].sum() + df["Cred"].sum()
-                        ws.write_number(row_f_razao + 2, 5, t_r, f_vde if abs(t_r) < 0.01 else f_vrm)
+                        ws.write_number(row_f_razao + 3, 5, t_r, f_vde if abs(t_r) < 0.01 else f_vrm)
                         
                         ws.write(row_f_res + 2, 11, "Saldo Final:", f_cab)
                         t_c = res["Dif"].sum()
