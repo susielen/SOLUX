@@ -28,7 +28,7 @@ st.markdown("""
         margin-bottom: 25px; 
     }
     
-    .stDownloadButton button { background-color: #9B8ADE !important; color: white !important; font-weight: bold; width: 100%; height: 50px; }
+    .stDownloadButton button { background-color: #4B0082 !important; color: white !important; font-weight: bold; width: 100%; height: 50px; }
 
     /* AQUI ESTÁ A COR QUE VOCÊ PEDIU PARA O QUADRADO DO ARQUIVO */
     [data-testid="stFileUploadDropzone"] {
