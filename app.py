@@ -45,7 +45,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('O robô SOLUX está processando... 🕵️‍♂️✨'):
+    with st.spinner('SOLUX está processando... 🕵️‍♂️✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
