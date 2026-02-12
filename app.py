@@ -41,7 +41,7 @@ def to_num(val):
 with st.sidebar:
     st.header("⚙️ Painel de Controle")
     # O usuário escolhe o tipo de conciliação aqui
-    tipo_robo = st.radio("Este projeto é de:", ["Cliente", "Fornecedor"])
+    tipo_robo = st.radio("Este projeto é de:", ["Clientes", "Fornecedores"])
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
