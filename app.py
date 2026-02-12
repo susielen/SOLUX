@@ -6,7 +6,7 @@ from io import BytesIO
 # 1. Configuração da Página
 st.set_page_config(page_title="SOLUX", page_icon="💡", layout="wide")
 
-# 2. ESTILO DA INTERFACE (Sincronizando as cores)
+# 2. ESTILO DA INTERFACE
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
@@ -14,7 +14,6 @@ st.markdown("""
     .stApp { background-color: #F3F0FF; }
     header[data-testid="stHeader"], [data-testid="stSidebar"] { background-color: #9B8ADE !important; }
     
-    /* COR DO TÍTULO (REFERÊNCIA) */
     .titulo { 
         font-family: 'Montserrat', sans-serif; 
         color: #4B0082; 
@@ -22,21 +21,22 @@ st.markdown("""
         font-weight: 800; 
         text-align: center; 
         padding: 10px; 
-        background-color: rgba(230, 224, 255, 0.9); 
+        background-color: #E6E0FF; 
         border-radius: 10px; 
         border: 1px solid #9B8ADE; 
         margin-top: -35px; 
         margin-bottom: 25px; 
     }
     
-    /* APLICANDO A MESMA COR NO QUADRADO DRAG AND DROP */
+    /* ESTILIZAÇÃO DO QUADRADO DE ARQUIVO (LILÁS) */
     [data-testid="stFileUploadDropzone"] {
-        background-color: rgba(230, 224, 255, 0.9) !important;
+        background-color: #E6E0FF !important; /* Cor lilás igual ao fundo do título */
         border: 2px dashed #9B8ADE !important;
         border-radius: 10px;
+        padding: 2rem;
     }
     
-    /* Ajuste da cor do texto para combinar */
+    /* Cor do texto dentro do quadrado lilás */
     [data-testid="stFileUploadDropzone"] p, [data-testid="stFileUploadDropzone"] span {
         color: #4B0082 !important;
         font-weight: bold;
@@ -60,7 +60,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Suba o arquivo aqui", type=["xlsx", "xls", "csv"])
 
 if arquivo:
-    with st.spinner('SOLUX deixando tudo na mesma cor... ✨'):
+    with st.spinner('SOLUX processando... ✨'):
         try:
             if arquivo.name.endswith('.csv'):
                 df_bruto = pd.read_csv(arquivo, header=None, sep=None, engine='python', encoding='latin-1')
@@ -91,6 +91,7 @@ if arquivo:
                         except: data_formatada = str(lin[0])
 
                         h_up = hist.upper()
+                        # Termos de busca atualizados
                         pats = [r'SERVIÇO\s?TOMADO\s?(\d+)', r'FRETE\s?TOMADO\s?(\d+)', r'NF\s?DE\s?S\s?(\d+)', r'CTE\s?(\d+)', r'SAÍDA\s?(\d+)', r'PRESTADO\s?(\d+)', r'NFE\s?(\d+)', r'NF\s?(\d+)']
                         nf_res = None
                         for p in pats:
@@ -137,7 +138,7 @@ if arquivo:
                         ws.write(row_f + 2, 4, "Saldo Líquido:", f_label_saldo)
                         ws.write_number(row_f + 2, 5, sl, f_saldo_verde if sl >= 0 else f_saldo_vermelho)
 
-                st.success("✅ Interface sincronizada com sucesso!")
+                st.success("✅ Interface lilás pronta!")
                 st.download_button("📥 BAIXAR RELATÓRIO", out.getvalue(), "conciliacao.xlsx")
         except Exception as e:
             st.error(f"Erro: {e}")
