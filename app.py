@@ -117,4 +117,32 @@ if arquivo:
                         
                         # Espaço (pula linha) e Totais
                         ws.write(row_f + 2, 3, "TOTAL RAZÃO:", f_cab)
-                        ws.write_number(row_f + 2, 4, df_emp["Deb"].sum
+                        ws.write_number(row_f + 2, 4, df_emp["Deb"].sum(), f_m)
+                        ws.write_number(row_f + 2, 5, df_emp["Cred"].sum(), f_m)
+                        ws.write(row_f + 3, 4, "Saldo Líquido:", f_cab)
+                        tr = df_emp["Deb"].sum() + df_emp["Cred"].sum()
+                        ws.write_number(row_f + 3, 5, tr, f_vde if abs(tr) < 0.01 else f_vrm)
+
+                        # Tabela da Direita (Conciliação)
+                        res = df_emp.groupby("NF").agg({"Deb":"sum", "Cred":"sum"}).reset_index()
+                        res["Dif"] = res["Deb"] + res["Cred"]
+                        for ci, v in enumerate(["NF","Deb","Cred","Diferença", "Status"]):
+                            ws.write(5, ci+8, v, f_cab)
+                        row_res = 5
+                        for ri, r in enumerate(res.values):
+                            ws.write(6+ri, 8, str(r[0]), f_c); ws.write_number(6+ri, 9, r[1], f_m)
+                            ws.write_number(6+ri, 10, r[2], f_m); ws.write_number(6+ri, 11, r[3], f_m)
+                            st_ok = abs(r[3]) < 0.01
+                            ws.write(6+ri, 12, "OK" if st_ok else "EM ABERTO", 
+                                     wb.add_format({'align':'center','bold':1,'border':1,'font_color':'green' if st_ok else '#CC7A00'}))
+                            row_res = 6+ri
+                        
+                        # Espaço (pula linha) e Saldo Final
+                        ws.write(row_res + 2, 11, "Saldo Final:", f_cab)
+                        tc = res["Dif"].sum()
+                        ws.write_number(row_res + 2, 12, tc, f_vde if abs(tc) < 0.01 else f_vrm)
+
+                st.success("✅ Relatório finalizado: Cores originais e layout limpo!")
+                st.download_button("📥 BAIXAR RELATÓRIO SOLUX", out.getvalue(), "solux_conciliacao_oficial.xlsx")
+        except Exception as e:
+            st.error(f"Erro: {e}")
