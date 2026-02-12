@@ -32,7 +32,7 @@ st.markdown("""
 
     /* AQUI ESTÁ A COR QUE VOCÊ PEDIU PARA O QUADRADO DO ARQUIVO */
     [data-testid="stFileUploadDropzone"] {
-        background-color: #E6E0FF !important; /* Mesma cor do fundo do título */
+        background-color: #4B0082 !important; /* Mesma cor do fundo do título */
         border: 2px dashed #9B8ADE !important;
         border-radius: 10px;
     }
