@@ -4,7 +4,7 @@ import re
 from io import BytesIO
 
 # 1. Configuração da Página
-st.set_page_config(page_title="SOLUX 2026", page_icon="💡", layout="wide")
+st.set_page_config(page_title="SOLUX", page_icon="💡", layout="wide")
 
 # 2. ESTILO SOLUX FINAL (Cores e Botão Lilás)
 st.markdown("""
@@ -28,7 +28,7 @@ st.markdown("""
     [data-testid="stSidebar"] * { color: #FFFFFF !important; font-weight: 600 !important; }
     .stDownloadButton button { background-color: #9B8ADE !important; color: white !important; border-radius: 8px !important; }
     </style>
-    <p class="titulo">💡 SOLUX 2026: Versão Multi-Conciliação 💡</p>
+    <p class="titulo">💡 SOLUX:Seu parceiro na conciliação 💡</p>
     """, unsafe_allow_html=True)
 
 def to_num(val):
