@@ -28,7 +28,7 @@ st.markdown("""
     [data-testid="stSidebar"] * { color: #FFFFFF !important; font-weight: 600 !important; }
     .stDownloadButton button { background-color: #9B8ADE !important; color: white !important; border-radius: 8px !important; }
     </style>
-    <p class="titulo">💡 SOLUX:Seu parceiro na conciliação 💡</p>
+    <p class="titulo">💡 SOLUX: Seu parceiro na conciliação 💡</p>
     """, unsafe_allow_html=True)
 
 def to_num(val):
