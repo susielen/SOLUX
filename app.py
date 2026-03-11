@@ -1,3 +1,12 @@
+import streamlit as st
+import pandas as pd
+import re
+from io import BytesIO
+
+# 1. Configuração da Página
+st.set_page_config(page_title="SOLUX", page_icon="💡", layout="wide")
+
+# 2. ESTILO DA INTERFACE (Tema Visual da SOLUX)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
